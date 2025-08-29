@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Attendance Pro Max</string>
+
+    <!-- Main Activity -->
+    <string name="scan_qr_code">SCAN QR CODE</string>
+    <string name="manage_users">MANAGE USERS</string>
+    <string name="app_description">Scan QR code to automatically sign in all active users</string>
+    <string name="user_statistics">User Statistics</string>
+    <string name="total_users">Total Users: %1$d</string>
+    <string name="active_users">Active Users: %1$d</string>
+
+    <!-- User Management -->
+    <string name="user_management">User Management</string>
+    <string name="add_user">ADD USER</string>
+    <string name="clear_all">CLEAR ALL</string>
+    <string name="users_list">Users List</string>
+    <string name="no_users_yet">No users added yet</string>
+    <string name="tap_add_user">Tap \'ADD USER\' to get started</string>
+
+    <!-- Dialog -->
+    <string name="add_new_user">Add New User</string>
+    <string name="edit_user">Edit User</string>
+    <string name="full_name">Full Name</string>
+    <string name="user_id">User ID / Student ID</string>
+    <string name="password">Password</string>
+    <string name="add">Add</string>
+    <string name="update">Update</string>
+    <string name="cancel">Cancel</string>
+    <string name="delete">Delete</string>
+    <string name="edit">EDIT</string>
+
+    <!-- Messages -->
+    <string name="camera_permission_required">Camera permission is required to scan QR code</string>
+    <string name="camera_permission_granted">Camera permission granted</string>
+    <string name="qr_scanned_success">QR Code scanned successfully!</string>
+    <string name="invalid_qr_code">Invalid QR code. Please scan a valid attendance URL.</string>
+    <string name="user_added_success">User added successfully</string>
+    <string name="user_updated_success">User updated successfully</string>
+    <string name="user_deleted_success">User deleted successfully</string>
+    <string name="user_exists">User ID already exists</string>
+    <string name="add_users_first">Please add at least one active user first!</string>
+    <string name="all_users_completed">Attendance completed for all users!</string>
+    <string name="attendance_automation_completed">Attendance automation completed!</string>
+
+    <!-- Validation Messages -->
+    <string name="enter_name">Please enter name</string>
+    <string name="enter_user_id">Please enter user ID</string>
+    <string name="enter_password">Please enter password</string>
+    <string name="user_id_min_length">User ID must be at least 3 characters</string>
+    <string name="password_min_length">Password must be at least 4 characters</string>
+
+    <!-- Security -->
+    <string name="password_encrypted">🔒 Passwords are encrypted and stored securely</string>
+
+    <!-- Instructions -->
+    <string name="instructions_title">💡 Instructions:</string>
+    <string name="instructions_text">• Toggle switch to activate/deactivate users\n• Only active users will be used for auto sign-in\n• Edit user to update credentials\n• Delete user to remove permanently</string>
+
+    <!-- QR Scanner -->
+    <string name="qr_scanner_title">QR Code Scanner</string>
+    <string name="qr_scanner_instruction">Point your camera at the attendance QR code</string>
+    <string name="qr_scanner_frame_instruction">Make sure the QR code is clearly visible within the frame</string>
+    <string name="qr_scanner_back_instruction">Press back button to return to main screen</string>
+
+    <!-- WebView -->
+    <string name="auto_attendance_system">Auto Attendance System</string>
+    <string name="loading">Loading...</string>
+    <string name="processing_attendance">Processing attendance...</string>
+    <string name="automated_login_progress">Automated Login In Progress</string>
+    <string name="loading_attendance_page">Loading attendance page...</string>
+    <string name="signing_in_user">Signing in user: %1$s (%2$d/%3$d)</string>
+    <string name="login_submitted">Login submitted for %1$s. Processing...</string>
+    <string name="login_failed">Login failed: %1$s</string>
+    <string name="preparing_next_user">Preparing next user...</string>
+    <string name="all_users_completed_status">All users completed!</string>
+
+    <!-- Confirmation Dialogs -->
+    <string name="delete_user_title">Delete User</string>
+    <string name="delete_user_message">Are you sure you want to delete %1$s?</string>
+    <string name="clear_all_users_title">Clear All Users</string>
+    <string name="clear_all_users_message">Are you sure you want to delete all users? This action cannot be undone.</string>
+    <string name="clear_all_users_button">Clear All</string>
+    <string name="no_users_to_clear">No users to clear</string>
+    <string name="all_users_cleared">All users cleared</string>
+
+</resources>
