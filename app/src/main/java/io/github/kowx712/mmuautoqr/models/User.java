@@ -1,4 +1,4 @@
-package com.example.autoqr.models;
+package io.github.kowx712.mmuautoqr.models;
 
 import androidx.annotation.NonNull;
 

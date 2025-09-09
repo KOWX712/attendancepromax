@@ -1,4 +1,4 @@
-package com.example.autoqr.ui.theme
+package io.github.kowx712.mmuautoqr.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

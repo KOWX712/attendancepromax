@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = 'com.example.autoqr'
+    namespace = 'io.github.kowx712.mmuautoqr'
     compileSdk 36
 
     defaultConfig {
-        applicationId "com.example.autoqr"
+        applicationId "io.github.kowx712.mmuautoqr"
         minSdk 26
         versionCode 1
         versionName "1.0"

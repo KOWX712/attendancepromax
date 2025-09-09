@@ -5,6 +5,9 @@
       <SelectionState runConfigName="autoqr.app">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
+      <SelectionState runConfigName="io.github.kowx712.mmuautoqr.app">
+        <option name="selectionMode" value="DROPDOWN" />
+      </SelectionState>
     </selectionStates>
   </component>
 </project>

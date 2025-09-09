@@ -1,11 +1,10 @@
-package com.example.autoqr
+package io.github.kowx712.mmuautoqr
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -29,9 +28,9 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
-import com.example.autoqr.models.User
-import com.example.autoqr.ui.theme.AutoqrTheme
-import com.example.autoqr.utils.UserManager
+import io.github.kowx712.mmuautoqr.models.User
+import io.github.kowx712.mmuautoqr.ui.theme.AutoqrTheme
+import io.github.kowx712.mmuautoqr.utils.UserManager
 
 class WebViewActivity : ComponentActivity() {
     private lateinit var mainHandler: Handler

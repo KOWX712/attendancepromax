@@ -1,6 +1,5 @@
-package com.example.autoqr.ui.theme
+package io.github.kowx712.mmuautoqr.ui.theme
 
-import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme

@@ -1,4 +1,4 @@
-package com.example.autoqr
+package io.github.kowx712.mmuautoqr
 
 import android.Manifest
 import android.content.Intent
@@ -45,7 +45,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.compose.ui.res.stringResource
-import com.example.autoqr.ui.theme.AutoqrTheme
+import io.github.kowx712.mmuautoqr.ui.theme.AutoqrTheme
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.MultiFormatReader

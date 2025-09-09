@@ -1,4 +1,4 @@
-package com.example.autoqr.ui.theme
+package io.github.kowx712.mmuautoqr.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

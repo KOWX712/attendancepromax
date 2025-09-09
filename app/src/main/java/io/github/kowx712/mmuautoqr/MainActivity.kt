@@ -1,4 +1,4 @@
-package com.example.autoqr
+package io.github.kowx712.mmuautoqr
 
 import android.Manifest
 import android.content.Intent
@@ -39,8 +39,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.example.autoqr.ui.theme.AutoqrTheme
-import com.example.autoqr.utils.UserManager
+import io.github.kowx712.mmuautoqr.ui.theme.AutoqrTheme
+import io.github.kowx712.mmuautoqr.utils.UserManager
 
 class MainActivity : ComponentActivity() {
     private lateinit var userManager: UserManager

@@ -1,4 +1,4 @@
-package com.example.autoqr
+package io.github.kowx712.mmuautoqr
 
 import android.annotation.SuppressLint
 import android.os.Bundle
@@ -32,9 +32,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
-import com.example.autoqr.models.User
-import com.example.autoqr.ui.theme.AutoqrTheme
-import com.example.autoqr.utils.UserManager
+import io.github.kowx712.mmuautoqr.models.User
+import io.github.kowx712.mmuautoqr.ui.theme.AutoqrTheme
+import io.github.kowx712.mmuautoqr.utils.UserManager
 
 class UserManagementActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

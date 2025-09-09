@@ -1,8 +1,9 @@
-package com.example.autoqr.utils;
+package io.github.kowx712.mmuautoqr.utils;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import com.example.autoqr.models.User;
+import android.util.Log;
+import io.github.kowx712.mmuautoqr.models.User;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
@@ -14,17 +15,17 @@ public class UserManager {
     private static final String PREFS_NAME = "AttendanceAppPrefs";
     private static final String KEY_USERS = "users";
     private static final String KEY_ENCRYPTION_KEY = "encryption_key";
+    private static final String TAG = "UserManager";
 
-    private SharedPreferences prefs;
-    private Gson gson;
-    private String encryptionKey;
+    private final SharedPreferences prefs;
+    private final Gson gson;
 
     public UserManager(Context context) {
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         gson = new Gson();
 
         // Get or generate encryption key
-        encryptionKey = prefs.getString(KEY_ENCRYPTION_KEY, null);
+        String encryptionKey = prefs.getString(KEY_ENCRYPTION_KEY, null);
         if (encryptionKey == null) {
             encryptionKey = EncryptionUtils.generateKey();
             if (encryptionKey == null) {
@@ -54,7 +55,7 @@ public class UserManager {
             editor.apply();
             editor = null;
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e(TAG, "Error saving users", e);
         }
     }
 
@@ -80,14 +81,14 @@ public class UserManager {
                                 String singleDecrypt = EncryptionUtils.simpleDecrypt(user.getPassword());
                                 user.setPassword(singleDecrypt);
                             } catch (Exception ex) {
-                                e.printStackTrace();
+                                Log.e(TAG, "Error decrypting password (inner catch)", ex);
                             }
                         }
                     }
                 }
                 return users;
             } catch (Exception e) {
-                e.printStackTrace();
+                Log.e(TAG, "Error getting users", e);
                 return new ArrayList<>();
             }
         }
