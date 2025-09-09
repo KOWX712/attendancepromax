@@ -2,12 +2,11 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@android:color/black"
-    >
+    android:background="@android:color/black">
 
-    <!-- QR Code Scanner -->
-    <com.journeyapps.barcodescanner.CompoundBarcodeView
-        android:id="@+id/barcode_scanner"
+    <!-- CameraX PreviewView -->
+    <androidx.camera.view.PreviewView
+        android:id="@+id/preview_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
@@ -18,8 +17,10 @@
         android:layout_alignParentTop="true"
         android:orientation="vertical"
         android:background="#80000000"
-        android:padding="16dp"
-        android:layout_marginTop="50dp">
+        android:paddingTop="50dp"
+        android:paddingBottom="16dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp">
 
         <TextView
             android:layout_width="match_parent"
@@ -38,36 +39,26 @@
             android:textSize="14sp"
             android:textColor="@android:color/white"
             android:gravity="center" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Pinch to zoom in/out on the scanning frame"
-            android:textSize="12sp"
-            android:textColor="@android:color/white"
-            android:gravity="center"
-            android:layout_marginTop="4dp" />
-
     </LinearLayout>
 
-    <!-- Scanning frame overlay with zoom capability -->
+    <!-- Scanning frame overlay -->
     <View
         android:id="@+id/scanning_frame"
         android:layout_width="250dp"
         android:layout_height="250dp"
         android:layout_centerInParent="true"
         android:background="@drawable/scanning_frame"
-        android:clickable="true"
-        android:focusable="true" />
+        android:clickable="false"
+        android:focusable="false" />
 
-    <!-- Bottom instructions -->
+    <!-- Bottom container for buttons -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
         android:orientation="vertical"
         android:background="#80000000"
-        android:padding="16dp">
+        android:padding="50dp">
     </LinearLayout>
 
 </RelativeLayout>
