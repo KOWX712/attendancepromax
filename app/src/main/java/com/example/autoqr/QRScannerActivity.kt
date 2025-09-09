@@ -1,0 +1,384 @@
+package com.example.autoqr
+
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.ImageFormat
+import android.media.AudioManager
+import android.media.ToneGenerator
+import android.os.Bundle
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.Camera
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageProxy
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.compose.ui.res.stringResource
+import com.example.autoqr.ui.theme.AutoqrTheme
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.zxing.BinaryBitmap
+import com.google.zxing.MultiFormatReader
+import com.google.zxing.NotFoundException
+import com.google.zxing.PlanarYUVLuminanceSource
+import com.google.zxing.Result
+import com.google.zxing.common.HybridBinarizer
+import java.nio.ByteBuffer
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+
+class QRScannerActivity : ComponentActivity() {
+    private var toneGenerator: ToneGenerator? = null
+    private var camera: Camera? = null
+    private var cameraExecutor: ExecutorService? = null
+    private var multiFormatReader: MultiFormatReader? = null
+    private var cameraProviderFuture: ListenableFuture<ProcessCameraProvider>? = null
+
+    private val requestCameraPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (isGranted) startCamera() else {
+                Toast.makeText(this, getString(R.string.camera_permission_required), Toast.LENGTH_LONG).show()
+                finish()
+            }
+        }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        initializeScanSound()
+        cameraExecutor = Executors.newSingleThreadExecutor()
+        multiFormatReader = MultiFormatReader()
+
+        setContent {
+            AutoqrTheme {
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    val barColor = MaterialTheme.colorScheme.background.toArgb()
+                    val dark = androidx.compose.foundation.isSystemInDarkTheme()
+                    SideEffect {
+                        window.statusBarColor = barColor
+                        window.navigationBarColor = barColor
+                        val controller = WindowCompat.getInsetsController(window, window.decorView)
+                        controller.isAppearanceLightStatusBars = !dark
+                        controller.isAppearanceLightNavigationBars = !dark
+                    }
+                    ScannerScreen(
+                        onReady = {
+                            checkPermissionAndStart()
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    private fun checkPermissionAndStart() {
+        val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        if (granted) startCamera() else requestCameraPermission.launch(Manifest.permission.CAMERA)
+    }
+
+    private fun startCamera() {
+        cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+        cameraProviderFuture?.addListener({
+            val provider = cameraProviderFuture?.get() ?: return@addListener
+            bindPreviewAndAnalysis(provider)
+        }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun bindPreviewAndAnalysis(cameraProvider: ProcessCameraProvider) {
+        val previewView = PreviewView(this)
+        val previewUseCase = Preview.Builder().build().apply {
+            setSurfaceProvider(previewView.surfaceProvider)
+        }
+        val analysisUseCase = ImageAnalysis.Builder()
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            .build()
+
+        var isScanning = true
+
+        analysisUseCase.setAnalyzer(cameraExecutor!!) { imageProxy: ImageProxy ->
+            if (!isScanning) {
+                imageProxy.close(); return@setAnalyzer
+            }
+            if (imageProxy.format != ImageFormat.YUV_420_888 && imageProxy.format != ImageFormat.YUV_422_888 && imageProxy.format != ImageFormat.YUV_444_888) {
+                imageProxy.close(); return@setAnalyzer
+            }
+
+            val yPlane = imageProxy.planes[0]
+            val yBuffer: ByteBuffer = yPlane.buffer
+            val yData = ByteArray(yBuffer.remaining())
+            yBuffer.get(yData)
+
+            val source = PlanarYUVLuminanceSource(
+                yData, yPlane.rowStride, imageProxy.height,
+                0, 0, yPlane.rowStride, imageProxy.height, false
+            )
+            val bitmap = BinaryBitmap(HybridBinarizer(source))
+            try {
+                val result: Result? = multiFormatReader?.decode(bitmap)
+                if (result != null && !result.text.isNullOrEmpty()) {
+                    isScanning = false
+                    val scannedUrl = result.text.trim()
+                    runOnUiThread {
+                        if (isValidUrl(scannedUrl)) {
+                            playSuccessSound()
+                            Toast.makeText(this, getString(R.string.qr_scanned_success), Toast.LENGTH_SHORT).show()
+                            val intent = Intent(this, WebViewActivity::class.java)
+                            intent.putExtra("url", scannedUrl)
+                            startActivity(intent)
+                            finish()
+                        } else {
+                            Toast.makeText(this, getString(R.string.invalid_qr_code), Toast.LENGTH_LONG).show()
+                            isScanning = true
+                        }
+                    }
+                }
+            } catch (e: NotFoundException) {
+            } catch (e: Exception) {
+            } finally {
+                multiFormatReader?.reset()
+                imageProxy.close()
+            }
+        }
+
+        val cameraSelector = CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_BACK).build()
+        try {
+            cameraProvider.unbindAll()
+            camera = cameraProvider.bindToLifecycle(this, cameraSelector, previewUseCase, analysisUseCase)
+        } catch (_: Exception) { }
+
+        // Attach the previewView to content by updating composition local state
+        runOnUiThread {
+            setContent {
+                AutoqrTheme {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        ScannerScreen(previewView = previewView, onReady = { }, onScale = { scale ->
+                            val state = camera?.cameraInfo?.zoomState?.value ?: return@ScannerScreen
+                            val newRatio = (state.zoomRatio * scale).coerceIn(state.minZoomRatio, state.maxZoomRatio)
+                            camera?.cameraControl?.setZoomRatio(newRatio)
+                        })
+                    }
+                }
+            }
+        }
+    }
+
+    private fun isValidUrl(url: String?): Boolean {
+        if (url.isNullOrEmpty()) return false
+        val lower = url.lowercase()
+        val starts = lower.startsWith("http://") || lower.startsWith("https://")
+        val contains = lower.contains("clic") || lower.contains("osc.mmu.edu.my")
+        return starts && contains
+    }
+
+    private fun initializeScanSound() {
+        toneGenerator = try {
+            ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun playSuccessSound() {
+        try {
+            toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 200)
+        } catch (_: Exception) { }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        toneGenerator?.release()
+        cameraExecutor?.shutdown()
+        multiFormatReader?.reset()
+    }
+}
+
+@Composable
+private fun ScannerScreen(previewView: PreviewView? = null, onReady: () -> Unit, onScale: (Float) -> Unit = {}) {
+    LaunchedEffect(Unit) { onReady() }
+
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .pointerInput(Unit) {
+            detectTransformGestures { _, _, zoom, _ ->
+                if (zoom != 1f) onScale(zoom)
+            }
+        }
+    ) {
+        // Camera preview
+        AndroidView(
+            factory = { ctx -> previewView ?: PreviewView(ctx) },
+            modifier = Modifier.fillMaxSize()
+        )
+
+        // Top overlay
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0x80000000))
+                .padding(top = 50.dp, bottom = 16.dp, start = 16.dp, end = 16.dp)
+                .align(Alignment.TopCenter),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = stringResource(R.string.qr_scanner_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White
+            )
+            Text(
+                text = stringResource(R.string.qr_scanner_instruction),
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White
+            )
+        }
+
+        // Scanning frame implemented with Jetpack Compose
+        ScanningFrame(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(250.dp)
+        )
+
+        // Bottom spacer overlay
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(100.dp)
+                .background(Color(0x80000000))
+                .align(Alignment.BottomCenter)
+        )
+    }
+}
+
+@Composable
+private fun ScanningFrame(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val cornerRadius = 20.dp.toPx()
+        val thickness = 6.dp.toPx()
+        val lineLength = 30.dp.toPx()
+        val halfThickness = thickness / 2
+
+        // Top Left
+        drawArc(
+            color = Color.White,
+            startAngle = 180f,
+            sweepAngle = 90f,
+            useCenter = false,
+            topLeft = Offset(halfThickness, halfThickness),
+            size = Size(cornerRadius * 2 - thickness, cornerRadius * 2 - thickness),
+            style = Stroke(width = thickness)
+        )
+        drawLine(
+            color = Color.White,
+            start = Offset(cornerRadius, halfThickness),
+            end = Offset(cornerRadius + lineLength, halfThickness),
+            strokeWidth = thickness
+        )
+        drawLine(
+            color = Color.White,
+            start = Offset(halfThickness, cornerRadius),
+            end = Offset(halfThickness, cornerRadius + lineLength),
+            strokeWidth = thickness
+        )
+
+        // Top Right
+        val trArcTopLeft = Offset(size.width - cornerRadius * 2 + halfThickness, halfThickness)
+        drawArc(
+            color = Color.White,
+            startAngle = 270f,
+            sweepAngle = 90f,
+            useCenter = false,
+            topLeft = trArcTopLeft,
+            size = Size(cornerRadius * 2 - thickness, cornerRadius * 2 - thickness),
+            style = Stroke(width = thickness)
+        )
+        drawLine(
+            color = Color.White,
+            start = Offset(size.width - cornerRadius, halfThickness),
+            end = Offset(size.width - cornerRadius - lineLength, halfThickness),
+            strokeWidth = thickness
+        )
+        drawLine(
+            color = Color.White,
+            start = Offset(size.width - halfThickness, cornerRadius),
+            end = Offset(size.width - halfThickness, cornerRadius + lineLength),
+            strokeWidth = thickness
+        )
+
+        // Bottom Left
+        val blArcTopLeft = Offset(halfThickness, size.height - cornerRadius * 2 + halfThickness)
+        drawArc(
+            color = Color.White,
+            startAngle = 90f,
+            sweepAngle = 90f,
+            useCenter = false,
+            topLeft = blArcTopLeft,
+            size = Size(cornerRadius * 2 - thickness, cornerRadius * 2 - thickness),
+            style = Stroke(width = thickness)
+        )
+        drawLine(
+            color = Color.White,
+            start = Offset(cornerRadius, size.height - halfThickness),
+            end = Offset(cornerRadius + lineLength, size.height - halfThickness),
+            strokeWidth = thickness
+        )
+        drawLine(
+            color = Color.White,
+            start = Offset(halfThickness, size.height - cornerRadius),
+            end = Offset(halfThickness, size.height - cornerRadius - lineLength),
+            strokeWidth = thickness
+        )
+
+        // Bottom Right
+        val brArcTopLeft = Offset(size.width - cornerRadius * 2 + halfThickness, size.height - cornerRadius * 2 + halfThickness)
+        drawArc(
+            color = Color.White,
+            startAngle = 0f,
+            sweepAngle = 90f,
+            useCenter = false,
+            topLeft = brArcTopLeft,
+            size = Size(cornerRadius * 2 - thickness, cornerRadius * 2 - thickness),
+            style = Stroke(width = thickness)
+        )
+        drawLine(
+            color = Color.White,
+            start = Offset(size.width - cornerRadius, size.height - halfThickness),
+            end = Offset(size.width - cornerRadius - lineLength, size.height - halfThickness),
+            strokeWidth = thickness
+        )
+        drawLine(
+            color = Color.White,
+            start = Offset(size.width - halfThickness, size.height - cornerRadius),
+            end = Offset(size.width - halfThickness, size.height - cornerRadius - lineLength),
+            strokeWidth = thickness
+        )
+    }
+}

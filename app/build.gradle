@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace 'com.example.autoqr'
+    namespace = 'com.example.autoqr'
     compileSdk 36
 
     defaultConfig {
@@ -31,7 +31,7 @@ android {
         jvmTarget = '11'
     }
     buildFeatures {
-        compose true
+        compose = true
     }
 }
 
