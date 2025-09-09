@@ -10,11 +10,7 @@
     <string name="total_users">Total Users: %1$d</string>
     <string name="active_users">Active Users: %1$d</string>
     <string name="main_screen_title">MMU Attendance Automation</string>
-    <string name="main_screen_instructions_text">Instructions:
-1. Add users with their login credentials
-2. Ensure users are marked as active
-3. Scan the attendance QR code
-4. App will automatically sign in all active users</string>
+    <string name="main_screen_instructions_text">Instructions:\n1. Add users with their login credentials\n2. Ensure users are marked as active\n3. Scan the attendance QR code\n4. App will automatically sign in all active users</string>
 
     <!-- User Management -->
     <string name="user_management">User Management</string>
