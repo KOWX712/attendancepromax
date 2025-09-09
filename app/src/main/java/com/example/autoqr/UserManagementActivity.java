@@ -9,6 +9,7 @@ import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.autoqr.adapters.UserAdapter;
@@ -21,7 +22,6 @@ public class UserManagementActivity extends AppCompatActivity {
 
     private ListView listViewUsers;
     private Button btnAddUser, btnClearAll;
-    private UserAdapter userAdapter;
     private UserManager userManager;
     private List<User> userList;
 
@@ -34,6 +34,25 @@ public class UserManagementActivity extends AppCompatActivity {
         initializeUserManager();
         setupClickListeners();
         loadUsers();
+
+        // Handle back press using OnBackPressedDispatcher
+        final OnBackPressedCallback callback = new OnBackPressedCallback(true /* enabled by default */) {
+            @Override
+            public void handleOnBackPressed() {
+                setEnabled(false);
+                try {
+                    if (!isFinishing()) {
+                       UserManagementActivity.this.getOnBackPressedDispatcher().onBackPressed();
+                    }
+                } finally {
+                    if (!isFinishing()) {
+                       setEnabled(true);
+                    }
+                }
+                finish();
+            }
+        };
+        getOnBackPressedDispatcher().addCallback(this, callback);
     }
 
     private void initializeViews() {
@@ -64,7 +83,7 @@ public class UserManagementActivity extends AppCompatActivity {
 
     private void loadUsers() {
         userList = userManager.getUsers();
-        userAdapter = new UserAdapter(this, userList, new UserAdapter.UserActionListener() {
+        UserAdapter userAdapter = new UserAdapter(this, userList, new UserAdapter.UserActionListener() {
             @Override
             public void onEditUser(User user) {
                 showEditUserDialog(user);
@@ -220,11 +239,5 @@ public class UserManagementActivity extends AppCompatActivity {
         }
 
         return true;
-    }
-
-    @Override
-    public void onBackPressed() {
-        super.onBackPressed();
-        finish();
     }
 }

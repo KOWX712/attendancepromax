@@ -1,14 +1,17 @@
 package com.example.autoqr;
 
+import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.media.ToneGenerator;
 import android.media.AudioManager;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.journeyapps.barcodescanner.BarcodeCallback;
@@ -18,10 +21,10 @@ import com.journeyapps.barcodescanner.camera.CameraSettings;
 
 public class QRScannerActivity extends AppCompatActivity {
 
+    private static final String TAG = "QRScannerActivity";
     private CompoundBarcodeView barcodeView;
     private boolean isScanning = true;
     private ScaleGestureDetector scaleGestureDetector;
-    private View scanningFrame;
     private float scaleFactor = 1.0f;
     private static final float MIN_ZOOM = 0.5f;
     private static final float MAX_ZOOM = 3.0f;
@@ -33,13 +36,14 @@ public class QRScannerActivity extends AppCompatActivity {
         setContentView(R.layout.activity_qr_scanner);
 
         barcodeView = findViewById(R.id.barcode_scanner);
-        scanningFrame = findViewById(R.id.scanning_frame);
+        View scanningFrame = findViewById(R.id.scanning_frame);
 
         initializeScanSound();
 
         scaleGestureDetector = new ScaleGestureDetector(this, new ScaleListener());
 
         scanningFrame.setOnTouchListener(new View.OnTouchListener() {
+            @SuppressLint("ClickableViewAccessibility")
             @Override
             public boolean onTouch(View v, MotionEvent event) {
                 scaleGestureDetector.onTouchEvent(event);
@@ -87,13 +91,31 @@ public class QRScannerActivity extends AppCompatActivity {
                 barcodeView.setPivotY(barcodeView.getHeight() / 2f);
             }
         });
+
+        final OnBackPressedCallback callback = new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                setEnabled(false);
+                try {
+                    if (!isFinishing()) {
+                       QRScannerActivity.this.getOnBackPressedDispatcher().onBackPressed();
+                    }
+                } finally {
+                    if (!isFinishing()) {
+                       setEnabled(true);
+                    }
+                }
+                finish();
+            }
+        };
+        getOnBackPressedDispatcher().addCallback(this, callback);
     }
 
     private void initializeScanSound() {
         try {
             toneGenerator = new ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100);
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e(TAG, "Error initializing ToneGenerator", e);
             toneGenerator = null;
         }
     }
@@ -104,7 +126,7 @@ public class QRScannerActivity extends AppCompatActivity {
                 toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 200);
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e(TAG, "Error playing success sound", e);
         }
     }
 
@@ -122,7 +144,7 @@ public class QRScannerActivity extends AppCompatActivity {
                 barcodeView.setPivotX(barcodeView.getWidth() / 2f);
                 barcodeView.setPivotY(barcodeView.getHeight() / 2f);
             } catch (Exception e) {
-                e.printStackTrace();
+                Log.e(TAG, "Error scaling barcode view", e);
             }
 
             return true;
@@ -130,11 +152,12 @@ public class QRScannerActivity extends AppCompatActivity {
     }
 
     private boolean isValidUrl(String url) {
-        return url != null &&
+        if (url != null &&
                 (url.toLowerCase().startsWith("http://") ||
                         url.toLowerCase().startsWith("https://")) &&
-                url.contains("clic") ||
-                url.contains("osc.mmu.edu.my");
+                url.contains("clic")) return true;
+        assert url != null;
+        return url.contains("osc.mmu.edu.my");
     }
 
     @Override
@@ -157,11 +180,5 @@ public class QRScannerActivity extends AppCompatActivity {
             toneGenerator.release();
             toneGenerator = null;
         }
-    }
-
-    @Override
-    public void onBackPressed() {
-        super.onBackPressed();
-        finish();
     }
 }

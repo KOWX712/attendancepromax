@@ -1,5 +1,7 @@
 package com.example.autoqr.models;
 
+import androidx.annotation.NonNull;
+
 public class User {
     private String id;
     private String name;
@@ -59,6 +61,7 @@ public class User {
         isActive = active;
     }
 
+    @NonNull
     @Override
     public String toString() {
         return name + " (" + userId + ")";

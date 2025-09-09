@@ -1,5 +1,6 @@
 package com.example.autoqr.adapters;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -16,10 +17,9 @@ import java.util.List;
 
 public class UserAdapter extends BaseAdapter {
 
-    private Context context;
     private List<User> users;
-    private LayoutInflater inflater;
-    private UserActionListener listener;
+    private final LayoutInflater inflater;
+    private final UserActionListener listener;
 
     public interface UserActionListener {
         void onEditUser(User user);
@@ -28,7 +28,6 @@ public class UserAdapter extends BaseAdapter {
     }
 
     public UserAdapter(Context context, List<User> users, UserActionListener listener) {
-        this.context = context;
         this.users = users;
         this.listener = listener;
         this.inflater = LayoutInflater.from(context);
@@ -49,6 +48,7 @@ public class UserAdapter extends BaseAdapter {
         return position;
     }
 
+    @SuppressLint("SetTextI18n")
     @Override
     public View getView(int position, View convertView, ViewGroup parent) {
         ViewHolder holder;
@@ -103,6 +103,7 @@ public class UserAdapter extends BaseAdapter {
     private static class ViewHolder {
         TextView tvName;
         TextView tvUserId;
+        @SuppressLint("UseSwitchCompatOrMaterialCode")
         Switch switchActive;
         Button btnEdit;
         Button btnDelete;

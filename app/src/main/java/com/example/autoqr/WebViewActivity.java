@@ -1,5 +1,6 @@
 package com.example.autoqr;
 
+import android.annotation.SuppressLint;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -12,6 +13,7 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.autoqr.models.User;
@@ -24,10 +26,8 @@ public class WebViewActivity extends AppCompatActivity {
     private WebView webView;
     private ProgressBar progressBar;
     private TextView tvStatus;
-    private UserManager userManager;
     private List<User> activeUsers;
     private int currentUserIndex = 0;
-    private String attendanceUrl;
     private Handler mainHandler;
 
     @Override
@@ -36,6 +36,28 @@ public class WebViewActivity extends AppCompatActivity {
         setContentView(R.layout.activity_webview);
 
         initializeViews();
+
+        final OnBackPressedCallback callback = new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (webView != null && webView.canGoBack()) {
+                    webView.goBack();
+                } else {
+                    setEnabled(false);
+                    try {
+                        if (!isFinishing()) {
+                            WebViewActivity.this.getOnBackPressedDispatcher().onBackPressed();
+                        }
+                    } finally {
+                        if (!isFinishing()) {
+                            setEnabled(true);
+                        }
+                    }
+                }
+            }
+        };
+        getOnBackPressedDispatcher().addCallback(this, callback);
+
         setupWebView();
         loadAttendanceData();
     }
@@ -47,6 +69,7 @@ public class WebViewActivity extends AppCompatActivity {
         mainHandler = new Handler(Looper.getMainLooper());
     }
 
+    @SuppressLint("SetJavaScriptEnabled")
     private void setupWebView() {
         WebSettings webSettings = webView.getSettings();
         webSettings.setJavaScriptEnabled(true);
@@ -78,9 +101,9 @@ public class WebViewActivity extends AppCompatActivity {
     }
 
     private void loadAttendanceData() {
-        attendanceUrl = getIntent().getStringExtra("url");
+        String attendanceUrl = getIntent().getStringExtra("url");
 
-        userManager = new UserManager(this);
+        UserManager userManager = new UserManager(this);
         activeUsers = userManager.getActiveUsers();
 
         if (activeUsers.isEmpty()) {
@@ -90,6 +113,7 @@ public class WebViewActivity extends AppCompatActivity {
         }
 
         updateStatus("Loading attendance page...");
+        assert attendanceUrl != null;
         webView.loadUrl(attendanceUrl);
     }
 
@@ -208,15 +232,6 @@ public class WebViewActivity extends AppCompatActivity {
                     }, 2000);
                 }
             });
-        }
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            super.onBackPressed();
         }
     }
 }
