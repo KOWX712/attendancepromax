@@ -35,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -257,6 +258,7 @@ private fun ScannerScreen(previewView: PreviewView? = null, onReady: () -> Unit,
             modifier = Modifier
                 .align(Alignment.Center)
                 .size(250.dp)
+                .alpha(0.5f)
         )
 
         // Bottom spacer overlay
@@ -274,7 +276,7 @@ private fun ScannerScreen(previewView: PreviewView? = null, onReady: () -> Unit,
 private fun ScanningFrame(modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
         val cornerRadius = 20.dp.toPx()
-        val thickness = 6.dp.toPx()
+        val thickness = 2.dp.toPx()
         val lineLength = 30.dp.toPx()
         val halfThickness = thickness / 2
 
