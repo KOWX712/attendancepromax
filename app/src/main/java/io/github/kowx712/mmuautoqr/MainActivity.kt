@@ -3,16 +3,21 @@ package io.github.kowx712.mmuautoqr
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -20,22 +25,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
-import androidx.compose.runtime.SideEffect
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.runtime.DisposableEffect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -66,13 +69,17 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
+            val darkTheme = isSystemInDarkTheme()
+            enableEdgeToEdge(
+                statusBarStyle = SystemBarStyle.auto(
+                    Color.TRANSPARENT,
+                    Color.TRANSPARENT
+                ) { !darkTheme }
+            )
             AutoqrTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     val dark = isSystemInDarkTheme()
-                    val barColor = MaterialTheme.colorScheme.background.toArgb()
                     SideEffect {
-                        window.statusBarColor = barColor
-                        window.navigationBarColor = barColor
                         val controller = WindowCompat.getInsetsController(window, window.decorView)
                         controller.isAppearanceLightStatusBars = !dark
                         controller.isAppearanceLightNavigationBars = !dark
@@ -157,8 +164,9 @@ private fun MainScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .safeDrawingPadding()
             .padding(horizontal = 24.dp)
-            .padding(top = 50.dp, bottom = 24.dp),
+            .padding(top = 26.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {

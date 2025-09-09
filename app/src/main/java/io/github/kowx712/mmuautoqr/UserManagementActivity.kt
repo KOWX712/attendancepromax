@@ -1,10 +1,13 @@
 package io.github.kowx712.mmuautoqr
 
 import android.annotation.SuppressLint
+import android.graphics.Color
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
@@ -27,10 +31,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import io.github.kowx712.mmuautoqr.models.User
 import io.github.kowx712.mmuautoqr.ui.theme.AutoqrTheme
@@ -40,13 +43,17 @@ class UserManagementActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
+            val darkTheme = isSystemInDarkTheme()
+            enableEdgeToEdge(
+                statusBarStyle = SystemBarStyle.auto(
+                    Color.TRANSPARENT,
+                    Color.TRANSPARENT
+                ) { !darkTheme }
+            )
             AutoqrTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    val barColor = MaterialTheme.colorScheme.background.toArgb()
                     val dark = isSystemInDarkTheme()
                     SideEffect {
-                        window.statusBarColor = barColor
-                        window.navigationBarColor = barColor
                         val controller = WindowCompat.getInsetsController(window, window.decorView)
                         controller.isAppearanceLightStatusBars = !dark
                         controller.isAppearanceLightNavigationBars = !dark
@@ -68,7 +75,11 @@ private fun UserManagementScreen(userManager: UserManager) {
     var editUser by remember { mutableStateOf<User?>(null) }
     var userToDelete by remember { mutableStateOf<User?>(null) }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .safeDrawingPadding()
+        .padding(16.dp)
+    ) {
         Text(
             text = stringResource(R.string.user_management),
             style = MaterialTheme.typography.headlineMedium,

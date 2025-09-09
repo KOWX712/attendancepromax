@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
@@ -26,8 +27,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -38,14 +39,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import androidx.core.view.WindowCompat
-import androidx.compose.ui.res.stringResource
-import io.github.kowx712.mmuautoqr.ui.theme.AutoqrTheme
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.MultiFormatReader
@@ -53,6 +51,7 @@ import com.google.zxing.NotFoundException
 import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.Result
 import com.google.zxing.common.HybridBinarizer
+import io.github.kowx712.mmuautoqr.ui.theme.AutoqrTheme
 import java.nio.ByteBuffer
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -79,17 +78,9 @@ class QRScannerActivity : ComponentActivity() {
         multiFormatReader = MultiFormatReader()
 
         setContent {
+            enableEdgeToEdge()
             AutoqrTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    val barColor = MaterialTheme.colorScheme.background.toArgb()
-                    val dark = androidx.compose.foundation.isSystemInDarkTheme()
-                    SideEffect {
-                        window.statusBarColor = barColor
-                        window.navigationBarColor = barColor
-                        val controller = WindowCompat.getInsetsController(window, window.decorView)
-                        controller.isAppearanceLightStatusBars = !dark
-                        controller.isAppearanceLightNavigationBars = !dark
-                    }
                     ScannerScreen(
                         onReady = {
                             checkPermissionAndStart()
@@ -178,6 +169,7 @@ class QRScannerActivity : ComponentActivity() {
         // Attach the previewView to content by updating composition local state
         runOnUiThread {
             setContent {
+                enableEdgeToEdge()
                 AutoqrTheme {
                     Surface(modifier = Modifier.fillMaxSize()) {
                         ScannerScreen(previewView = previewView, onReady = { }, onScale = { scale ->
