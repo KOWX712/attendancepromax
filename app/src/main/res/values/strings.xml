@@ -9,6 +9,12 @@
     <string name="user_statistics">User Statistics</string>
     <string name="total_users">Total Users: %1$d</string>
     <string name="active_users">Active Users: %1$d</string>
+    <string name="main_screen_title">MMU Attendance Automation</string>
+    <string name="main_screen_instructions_text">Instructions:
+1. Add users with their login credentials
+2. Ensure users are marked as active
+3. Scan the attendance QR code
+4. App will automatically sign in all active users</string>
 
     <!-- User Management -->
     <string name="user_management">User Management</string>
@@ -32,6 +38,7 @@
     <!-- Messages -->
     <string name="camera_permission_required">Camera permission is required to scan QR code</string>
     <string name="camera_permission_granted">Camera permission granted</string>
+    <string name="camera_permission_needed">Camera permission needed. Please grant it.</string>
     <string name="qr_scanned_success">QR Code scanned successfully!</string>
     <string name="invalid_qr_code">Invalid QR code. Please scan a valid attendance URL.</string>
     <string name="user_added_success">User added successfully</string>
