@@ -7,6 +7,7 @@ import android.graphics.ImageFormat
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Bundle
+import android.view.HapticFeedbackConstants
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -207,6 +208,7 @@ class QRScannerActivity : ComponentActivity() {
     private fun playSuccessSound() {
         try {
             toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 200)
+            window.decorView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
         } catch (_: Exception) { }
     }
 

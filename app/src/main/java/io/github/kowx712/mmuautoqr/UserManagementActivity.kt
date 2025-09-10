@@ -3,6 +3,7 @@ package io.github.kowx712.mmuautoqr
 import android.annotation.SuppressLint
 import android.graphics.Color
 import android.os.Bundle
+import android.view.HapticFeedbackConstants
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -109,6 +110,7 @@ class UserManagementActivity : ComponentActivity() {
                         onToggleUserStatus = { user ->
                             userManager.toggleUserStatus(user.userId)
                             users = userManager.users
+                            window.decorView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                         },
                         onClearAllUsers = {
                             userManager.clearAllUsers()
