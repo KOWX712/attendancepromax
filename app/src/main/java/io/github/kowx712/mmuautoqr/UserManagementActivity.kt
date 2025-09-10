@@ -257,7 +257,8 @@ private fun UserRow(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Column(modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp)) {
-            Text(text = "${user.name} (${user.userId})", style = MaterialTheme.typography.titleMedium)
+            Text(text = "${user.name}", style = MaterialTheme.typography.titleMedium)
+            Text(text = "${user.userId}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Switch(
             checked = user.isActive,
