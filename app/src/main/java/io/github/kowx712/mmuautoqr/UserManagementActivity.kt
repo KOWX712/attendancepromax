@@ -34,11 +34,19 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.autofill.AutofillManager
 import androidx.compose.ui.autofill.ContentType
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -52,6 +60,7 @@ import androidx.core.view.WindowCompat
 import io.github.kowx712.mmuautoqr.models.User
 import io.github.kowx712.mmuautoqr.ui.theme.AutoqrTheme
 import io.github.kowx712.mmuautoqr.utils.UserManager
+import kotlinx.coroutines.delay
 
 class UserManagementActivity : ComponentActivity() {
     @SuppressLint("MutableCollectionMutableState")
@@ -173,7 +182,9 @@ private fun UserManagementScreen(
             style = MaterialTheme.typography.headlineMedium,
             modifier = Modifier.padding(bottom = 8.dp)
         )
-        LazyColumn(modifier = Modifier.weight(1f).padding(bottom = 16.dp)) {
+        LazyColumn(modifier = Modifier
+            .weight(1f)
+            .padding(bottom = 16.dp)) {
             items(users) { user ->
                 UserRow(
                     user = user,
@@ -294,6 +305,8 @@ private fun ShowUserDialog(
     var passwordVisible by remember { mutableStateOf(false) }
     val autofill = LocalContext.current.getSystemService(AutofillManager::class.java)
 
+    val nameFocusRequester = remember { FocusRequester() }
+
     AlertDialog(
         onDismissRequest = {
             autofill?.cancel()
@@ -308,7 +321,8 @@ private fun ShowUserDialog(
                     label = { Text(stringResource(R.string.full_name)) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .semantics { contentType = ContentType.PersonFullName },
+                        .semantics { contentType = ContentType.PersonFullName }
+                        .focusRequester(nameFocusRequester),
                 )
                 OutlinedTextField(
                     value = userId,
@@ -354,4 +368,8 @@ private fun ShowUserDialog(
         },
         dismissButton = { OutlinedButton(onClick = { onDismiss?.invoke() }) { Text(stringResource(R.string.cancel)) } }
     )
+    LaunchedEffect(Unit) {
+        delay(100)
+        nameFocusRequester.requestFocus()
+    }
 }
