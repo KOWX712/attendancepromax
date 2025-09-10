@@ -6,11 +6,12 @@ plugins {
 
 android {
     namespace = 'io.github.kowx712.mmuautoqr'
-    compileSdk 36
+    compileSdkVersion 36
 
     defaultConfig {
         applicationId "io.github.kowx712.mmuautoqr"
         minSdk 26
+        targetSdk 36
         versionCode 1
         versionName "1.0"
 
