@@ -19,9 +19,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -33,11 +38,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.autofill.AutofillManager
 import androidx.compose.ui.autofill.ContentType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentType
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -282,6 +289,7 @@ private fun ShowUserDialog(
     var name by remember { mutableStateOf(initial?.name ?: "") }
     var userId by remember { mutableStateOf(initial?.userId ?: "") }
     var password by remember { mutableStateOf(initial?.password ?: "") }
+    var passwordVisible by remember { mutableStateOf(false) }
     val autofill = LocalContext.current.getSystemService(AutofillManager::class.java)
 
     AlertDialog(
@@ -313,10 +321,17 @@ private fun ShowUserDialog(
                     value = password,
                     onValueChange = { password = it },
                     label = { Text(stringResource(R.string.password)) },
-                    visualTransformation = PasswordVisualTransformation(),
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .semantics { contentType = ContentType.Password }
+                        .semantics { contentType = ContentType.Password },
+                    trailingIcon = {
+                        val image = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
+                        IconButton(
+                            modifier = Modifier.pointerInput(Unit) {},
+                            onClick = { passwordVisible = !passwordVisible }
+                        ){ Icon(imageVector  = image, "") }
+                    }
                 )
             }
         },
