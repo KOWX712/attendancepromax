@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import io.github.kowx712.mmuautoqr.models.User
@@ -40,8 +41,10 @@ import io.github.kowx712.mmuautoqr.ui.theme.AutoqrTheme
 import io.github.kowx712.mmuautoqr.utils.UserManager
 
 class UserManagementActivity : ComponentActivity() {
+    @SuppressLint("MutableCollectionMutableState")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val userManager = UserManager(this)
         setContent {
             val darkTheme = isSystemInDarkTheme()
             enableEdgeToEdge(
@@ -58,27 +61,98 @@ class UserManagementActivity : ComponentActivity() {
                         controller.isAppearanceLightStatusBars = !dark
                         controller.isAppearanceLightNavigationBars = !dark
                     }
-                    UserManagementScreen(UserManager(this))
+
+                    var users by remember { mutableStateOf(userManager.users) }
+                    val context = LocalContext.current
+
+                    UserManagementScreen(
+                        users = users,
+                        onAddUser = { name, userId, password ->
+                            if (userManager.addUser(name, userId, password)) {
+                                users = userManager.users
+                                true
+                            } else {
+                                Toast.makeText(context, R.string.user_exists, Toast.LENGTH_SHORT).show()
+                                false
+                            }
+                        },
+                        onUpdateUser = { user, name, password ->
+                            if (userManager.updateUser(user.userId, name, password)) {
+                                users = userManager.users
+                                true
+                            } else {
+                                Toast.makeText(context, "Failed to update user", Toast.LENGTH_SHORT).show()
+                                false
+                            }
+                        },
+                        onDeleteUser = { user ->
+                            if (userManager.deleteUser(user.userId)) {
+                                users = userManager.users
+                                true
+                            } else {
+                                Toast.makeText(context, "Failed to delete user", Toast.LENGTH_SHORT).show()
+                                false
+                            }
+                        },
+                        onToggleUserStatus = { user ->
+                            userManager.toggleUserStatus(user.userId)
+                            users = userManager.users
+                        },
+                        onClearAllUsers = {
+                            userManager.clearAllUsers()
+                            users = userManager.users
+                        }
+                    )
                 }
             }
         }
     }
 }
 
+@Preview(showBackground = true)
+@Composable
+private fun UserManagementPreview() {
+    AutoqrTheme {
+        val users = remember {
+            mutableStateOf(
+                listOf(
+                    User("111", "Alice", "111", "123123"),
+                    User("222", "Bob", "222", "1231231")
+                )
+            )
+        }
+        UserManagementScreen(
+            users = users.value,
+            onAddUser = { _, _, _ -> true },
+            onUpdateUser = { _, _, _ -> true },
+            onDeleteUser = { true },
+            onToggleUserStatus = {},
+            onClearAllUsers = {}
+        )
+    }
+}
+
 @SuppressLint("MutableCollectionMutableState")
 @Composable
-private fun UserManagementScreen(userManager: UserManager) {
+private fun UserManagementScreen(
+    users: List<User>,
+    onAddUser: (String, String, String) -> Boolean,
+    onUpdateUser: (User, String, String) -> Boolean,
+    onDeleteUser: (User) -> Boolean,
+    onToggleUserStatus: (User) -> Unit,
+    onClearAllUsers: () -> Unit
+) {
     val context = LocalContext.current
-    var users by remember { mutableStateOf(userManager.users) }
     var showAddDialog by remember { mutableStateOf(false) }
     var showClearAllConfirm by remember { mutableStateOf(false) }
     var editUser by remember { mutableStateOf<User?>(null) }
     var userToDelete by remember { mutableStateOf<User?>(null) }
 
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .safeDrawingPadding()
-        .padding(16.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .safeDrawingPadding()
+            .padding(16.dp)
     ) {
         Text(
             text = stringResource(R.string.user_management),
@@ -91,10 +165,7 @@ private fun UserManagementScreen(userManager: UserManager) {
                     user = user,
                     onEdit = { toEdit -> editUser = toEdit },
                     onRequestDelete = { toDelete -> userToDelete = toDelete },
-                    onToggle = { toToggle ->
-                        userManager.toggleUserStatus(toToggle.userId)
-                        users = userManager.users
-                    }
+                    onToggle = { toToggle -> onToggleUserStatus(toToggle) }
                 )
             }
         }
@@ -116,28 +187,21 @@ private fun UserManagementScreen(userManager: UserManager) {
     }
 
     if (showAddDialog) {
-        showUserDialog(onDismiss = { showAddDialog = false }, onConfirmAdd = { name, userId, password ->
-            val ok = userManager.addUser(name, userId, password)
-            if (ok) {
-                users = userManager.users
+        ShowUserDialog(onDismiss = { showAddDialog = false }, onConfirmAdd = { name, userId, password ->
+            if (onAddUser(name, userId, password)) {
                 showAddDialog = false
-            } else {
-                Toast.makeText(context, R.string.user_exists, Toast.LENGTH_SHORT).show()
             }
         })
     }
 
     editUser?.let { toEdit ->
-        showUserDialog(
+        ShowUserDialog(
             initial = toEdit,
             onDismiss = { editUser = null },
             onConfirmEdit = { name, password ->
-                if (userManager.updateUser(toEdit.userId, name, password)) {
-                    users = userManager.users
-                } else {
-                    Toast.makeText(context, "Failed to update user", Toast.LENGTH_SHORT).show()
+                if (onUpdateUser(toEdit, name, password)) {
+                    editUser = null
                 }
-                editUser = null
             }
         )
     }
@@ -149,8 +213,7 @@ private fun UserManagementScreen(userManager: UserManager) {
             text = { Text(stringResource(R.string.clear_all_users_message)) },
             confirmButton = {
                 FilledTonalButton(onClick = {
-                    userManager.clearAllUsers()
-                    users = userManager.users
+                    onClearAllUsers()
                     showClearAllConfirm = false
                 }) { Text(stringResource(R.string.clear_all_users_button)) }
             },
@@ -161,16 +224,13 @@ private fun UserManagementScreen(userManager: UserManager) {
     userToDelete?.let { user ->
         AlertDialog(
             onDismissRequest = { userToDelete = null },
-            title = { Text(stringResource(R.string.delete_user_title))},
+            title = { Text(stringResource(R.string.delete_user_title)) },
             text = { Text(stringResource(R.string.delete_user_message, user.name)) },
             confirmButton = {
                 FilledTonalButton(onClick = {
-                    if (userManager.deleteUser(user.userId)) {
-                        users = userManager.users
-                    } else {
-                        Toast.makeText(context, "Failed to delete user", Toast.LENGTH_SHORT).show()
+                    if (onDeleteUser(user)) {
+                        userToDelete = null
                     }
-                    userToDelete = null
                 }) { Text(stringResource(R.string.delete)) }
             },
             dismissButton = { OutlinedButton(onClick = { userToDelete = null }) { Text(stringResource(R.string.cancel)) } }
@@ -207,7 +267,7 @@ private fun UserRow(
 }
 
 @Composable
-private fun showUserDialog(
+private fun ShowUserDialog(
     initial: User? = null,
     onDismiss: (() -> Unit)? = null,
     onConfirmAdd: ((String, String, String) -> Unit)? = null,

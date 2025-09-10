@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
@@ -151,6 +152,18 @@ class MainActivity : ComponentActivity() {
             requestCameraPermission.launch(Manifest.permission.CAMERA)
         }
     }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun MainScreenPreview() {
+    MainScreen(
+        totalUsers = 2,
+        activeUsers = 2,
+        onRefreshStats = {},
+        onScanQr = {},
+        onManageUsers = {}
+    )
 }
 
 @Composable

@@ -16,7 +16,7 @@ import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
-import androidx.camera.core.Preview
+import androidx.camera.core.Preview as CameraPreview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
@@ -36,12 +36,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -107,8 +111,8 @@ class QRScannerActivity : ComponentActivity() {
 
     private fun bindPreviewAndAnalysis(cameraProvider: ProcessCameraProvider) {
         val previewView = PreviewView(this)
-        val previewUseCase = Preview.Builder().build().apply {
-            setSurfaceProvider(previewView.surfaceProvider)
+        val previewUseCase = CameraPreview.Builder().build().apply {
+            surfaceProvider = previewView.surfaceProvider
         }
         val analysisUseCase = ImageAnalysis.Builder()
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -214,6 +218,12 @@ class QRScannerActivity : ComponentActivity() {
     }
 }
 
+@Preview(showBackground = false)
+@Composable
+private fun ScannerScreenPreview() {
+    ScannerScreen(previewView = null, onReady = {}, onScale = {})
+}
+
 @Composable
 private fun ScannerScreen(previewView: PreviewView? = null, onReady: () -> Unit, onScale: (Float) -> Unit = {}) {
     LaunchedEffect(Unit) { onReady() }
@@ -233,24 +243,45 @@ private fun ScannerScreen(previewView: PreviewView? = null, onReady: () -> Unit,
         )
 
         // Top overlay
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0x80000000))
-                .padding(top = 50.dp, bottom = 16.dp, start = 16.dp, end = 16.dp)
-                .align(Alignment.TopCenter),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .align(Alignment.TopCenter)
         ) {
-            Text(
-                text = stringResource(R.string.qr_scanner_title),
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(Color(0xC0000000))
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(Color(0xC0000000), Color.Transparent),
+                                startY = 0f,
+                                endY = size.height
+                            ),
+                            blendMode = BlendMode.DstIn
+                        )
+                    }
             )
-            Text(
-                text = stringResource(R.string.qr_scanner_instruction),
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White
-            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 50.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = stringResource(R.string.qr_scanner_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White
+                )
+                Text(
+                    text = stringResource(R.string.qr_scanner_instruction),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White
+                )
+            }
         }
 
         // Scanning frame implemented with Jetpack Compose
@@ -265,8 +296,19 @@ private fun ScannerScreen(previewView: PreviewView? = null, onReady: () -> Unit,
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(100.dp)
-                .background(Color(0x80000000))
+                .height(60.dp)
+                .background(Color(0xC0000000))
+                .drawWithContent {
+                    drawContent()
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color(0x80000000)),
+                            startY = 0f,
+                            endY = size.height
+                        ),
+                        blendMode = BlendMode.DstIn
+                    )
+                }
                 .align(Alignment.BottomCenter)
         )
     }
