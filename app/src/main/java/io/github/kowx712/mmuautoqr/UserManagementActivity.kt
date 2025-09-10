@@ -31,8 +31,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.AutofillManager
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentType
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -277,19 +282,47 @@ private fun ShowUserDialog(
     var name by remember { mutableStateOf(initial?.name ?: "") }
     var userId by remember { mutableStateOf(initial?.userId ?: "") }
     var password by remember { mutableStateOf(initial?.password ?: "") }
+    val autofill = LocalContext.current.getSystemService(AutofillManager::class.java)
 
     AlertDialog(
-        onDismissRequest = { onDismiss?.invoke() },
+        onDismissRequest = {
+            autofill?.cancel()
+            onDismiss?.invoke()
+        },
         title = { Text(if (initial == null) stringResource(R.string.add_new_user) else stringResource(R.string.edit_user)) },
         text = {
             Column {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(stringResource(R.string.full_name)) }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = userId, onValueChange = { userId = it }, label = { Text(stringResource(R.string.user_id)) }, modifier = Modifier.fillMaxWidth(), enabled = initial == null)
-                OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text(stringResource(R.string.password)) }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(stringResource(R.string.full_name)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentType = ContentType.PersonFullName },
+                )
+                OutlinedTextField(
+                    value = userId,
+                    onValueChange = { userId = it },
+                    label = { Text(stringResource(R.string.user_id)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentType = ContentType.Username },
+                    enabled = initial == null
+                )
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text(stringResource(R.string.password)) },
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentType = ContentType.Password }
+                )
             }
         },
         confirmButton = {
             Button(onClick = {
+                autofill?.commit()
                 if (name.isBlank()) { return@Button }
                 if (initial == null) {
                     if (userId.isBlank() || userId.length < 3) { return@Button }
