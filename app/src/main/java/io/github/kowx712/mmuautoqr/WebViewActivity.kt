@@ -1,6 +1,7 @@
 package io.github.kowx712.mmuautoqr
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.Bundle
@@ -76,7 +77,13 @@ class WebViewActivity : ComponentActivity() {
         var currentUserIndex by remember { mutableIntStateOf(0) }
         var statusText by remember { mutableStateOf(getString(R.string.loading_attendance_page)) }
         var isLoading by remember { mutableStateOf(true) }
-        val attendanceUrl = remember { intent.getStringExtra("url") ?: "" }
+        val attendanceUrl = remember {
+            if (intent.action == Intent.ACTION_VIEW) {
+                intent.dataString ?: ""
+            } else {
+                intent.getStringExtra("url") ?: ""
+            }
+        }
 
         if (activeUsers.isEmpty()) {
             LaunchedEffect(Unit) {
@@ -202,11 +209,13 @@ private fun AttendanceWebView(
                 }
             }
             onProvideWebView(this)
-            loadUrl(url)
+            if (url.isNotEmpty()) {
+                loadUrl(url)
+            }
         }
     }, update = { webView ->
-        onEvaluateLogin(webView)
+        if (url.isNotEmpty()) {
+             onEvaluateLogin(webView)
+        }
     })
 }
-
-
