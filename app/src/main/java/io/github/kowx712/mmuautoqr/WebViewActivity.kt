@@ -30,9 +30,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
@@ -42,6 +39,10 @@ import io.github.kowx712.mmuautoqr.utils.UserManager
 
 class WebViewActivity : ComponentActivity() {
     private lateinit var mainHandler: Handler
+
+    private fun startAutoLogin(activeUsers: List<User>, currentIndex: Int) {
+        // Triggered via onPageFinished -> onEvaluateLogin in the WebView composable
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,7 +72,6 @@ class WebViewActivity : ComponentActivity() {
 
     @Composable
     private fun WebViewScreen() {
-        val context = LocalContext.current
         val userManager = remember { UserManager(this@WebViewActivity) }
         val activeUsers = remember { userManager.activeUsers }
         var currentUserIndex by remember { mutableIntStateOf(0) }
@@ -84,6 +84,7 @@ class WebViewActivity : ComponentActivity() {
                 intent.getStringExtra("url") ?: ""
             }
         }
+        var initialLoginCanProceed by remember { mutableStateOf(false) }
 
         if (activeUsers.isEmpty()) {
             LaunchedEffect(Unit) {
@@ -103,17 +104,21 @@ class WebViewActivity : ComponentActivity() {
                     onPageFinished = {
                         isLoading = false
                         // Delay to ensure page ready
-                        mainHandler.postDelayed({ startAutoLogin(activeUsers, currentUserIndex) }, 2000)
+                        mainHandler.postDelayed({
+                            initialLoginCanProceed = true
+                        }, 2000)
                     },
                     onProvideWebView = { webView ->
                         webView.addJavascriptInterface(object : Any() {
-                            val currentUser = activeUsers[currentUserIndex]
                             @JavascriptInterface
                             fun onLoginSubmitted() {
+                                // Capture the index of the user for whom login was submitted
+                                val submittedUserIndex = currentUserIndex
+                                val currentUser = activeUsers[submittedUserIndex]
                                 mainHandler.postDelayed({
                                     statusText = getString(R.string.login_submitted, currentUser.name)
                                     mainHandler.postDelayed({
-                                        proceedToNextUser(activeUsers) { nextIndex ->
+                                        proceedToNextUser(activeUsers, submittedUserIndex) { nextIndex ->
                                             currentUserIndex = nextIndex
                                         }
                                     }, 3000)
@@ -122,11 +127,13 @@ class WebViewActivity : ComponentActivity() {
 
                             @JavascriptInterface
                             fun onLoginFailed(reason: String) {
+                                val failedUserIndex = currentUserIndex
+                                val currentUser = activeUsers[failedUserIndex]
                                 mainHandler.post {
                                     Toast.makeText(this@WebViewActivity, getString(R.string.login_failed, reason), Toast.LENGTH_SHORT).show()
                                     statusText = getString(R.string.login_failed, currentUser.name)
                                     mainHandler.postDelayed({
-                                        proceedToNextUser(activeUsers) { nextIndex ->
+                                        proceedToNextUser(activeUsers, failedUserIndex) { nextIndex ->
                                             currentUserIndex = nextIndex
                                         }
                                     }, 2000)
@@ -135,24 +142,36 @@ class WebViewActivity : ComponentActivity() {
                         }, "Android")
                     },
                     onEvaluateLogin = { webView ->
-                        val user = activeUsers[currentUserIndex]
-                        val js = "javascript:" +
-                                "function fillAndSubmit(user, pass) {" +
-                                "  var userField = document.querySelector('input[type=\"text\"], input[name*=\"user\"], input[id*=\"user\"], input[placeholder*=\"User\"]');" +
-                                "  var passField = document.querySelector('input[type=\"password\"]');" +
-                                "  var submitBtn = document.querySelector('input[type=\"submit\"], button[type=\"submit\"], input[value*=\"Sign\"], button');" +
-                                "  if (userField && passField) {" +
-                                "    userField.value = ''; passField.value = '';" +
-                                "    setTimeout(function() {" +
-                                "      userField.value = '" + user.userId + "';" +
-                                "      passField.value = '" + user.password + "';" +
-                                "      if (submitBtn) { submitBtn.click(); Android.onLoginSubmitted(); }" +
-                                "      else { Android.onLoginFailed('Submit button not found'); }" +
-                                "    }, 500);" +
-                                "  } else { Android.onLoginFailed('Login fields not found'); }" +
-                                "} fillAndSubmit('" + user.userId + "', '" + user.password + "');"
-                        webView.evaluateJavascript(js, null)
-                    }
+                        if (currentUserIndex < activeUsers.size) {
+                            val user = activeUsers[currentUserIndex]
+                            val js = "javascript:" +
+                                    "function fillAndSubmit(user, pass) {" +
+                                    "  var userField = document.querySelector('input[type=\"text\"], input[name*=\"user\"], input[id*=\"user\"], input[placeholder*=\"User\"]');" +
+                                    "  var passField = document.querySelector('input[type=\"password\"]');" +
+                                    "  var submitBtn = document.querySelector('input[type=\"submit\"], button[type=\"submit\"], input[value*=\"Sign\"], button');" +
+                                    "  " +
+                                    "  if (userField && passField) {" +
+                                    "    userField.value = '';" +
+                                    "    passField.value = '';" +
+                                    "    setTimeout(function() {" +
+                                    "      userField.value = user;" +
+                                    "      passField.value = pass;" +
+                                    "      if (submitBtn) {" +
+                                    "        submitBtn.click();" +
+                                    "        Android.onLoginSubmitted();" +
+                                    "      } else {" +
+                                    "        Android.onLoginFailed('Submit button not found');" +
+                                    "      }" +
+                                    "    }, 500);" +
+                                    "  } else {" +
+                                    "    Android.onLoginFailed('Login fields not found');" +
+                                    "  }" +
+                                    "}" +
+                                    "fillAndSubmit('" + user.userId + "', '" + user.password + "');";
+                            webView.evaluateJavascript(js, null)
+                        }
+                    },
+                    canTriggerLogin = initialLoginCanProceed
                 )
 
                 if (isLoading) {
@@ -170,12 +189,9 @@ class WebViewActivity : ComponentActivity() {
         }
     }
 
-    private fun startAutoLogin(activeUsers: List<User>, currentIndex: Int) {
-        // Triggered via onPageFinished -> onEvaluateLogin in the WebView composable
-    }
+    private fun proceedToNextUser(activeUsers: List<User>, current: Int, onIndex: (Int) -> Unit) {
+        val next = current + 1
 
-    private fun proceedToNextUser(activeUsers: List<User>, onIndex: (Int) -> Unit) {
-        val next = activeUsers.indexOfFirst { it == activeUsers.lastOrNull() } + 1
         if (next < activeUsers.size) {
             onIndex(next)
         } else {
@@ -192,6 +208,7 @@ private fun AttendanceWebView(
     onPageFinished: () -> Unit,
     onProvideWebView: (WebView) -> Unit,
     onEvaluateLogin: (WebView) -> Unit,
+    canTriggerLogin: Boolean
 ) {
     AndroidView(factory = { context ->
         WebView(context).apply {
@@ -214,8 +231,8 @@ private fun AttendanceWebView(
             }
         }
     }, update = { webView ->
-        if (url.isNotEmpty()) {
-             onEvaluateLogin(webView)
+        if (url.isNotEmpty() && canTriggerLogin) {
+            onEvaluateLogin(webView)
         }
     })
 }
