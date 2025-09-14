@@ -9,6 +9,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        build:
+        - { type: 'Release', name: 'release' }
+        - { type: 'Debug', name: 'debug' }
 
     steps:
     - name: Check out
@@ -30,22 +35,12 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    - name: Build release
-      run: ./gradlew assembleRelease
+    - name: Build ${{ matrix.build.name }}
+      run: ./gradlew assemble${{ matrix.build.type }}
 
-    - name: Build debug
-      run: ./gradlew assembleDebug
-
-    - name: Upload release
+    - name: Upload ${{ matrix.build.name }}
       uses: actions/upload-artifact@v4
       with:
-        name: release
-        path: app/build/outputs/apk/release/app-release.apk
-        compression-level: 9
-
-    - name: Upload debug
-      uses: actions/upload-artifact@v4
-      with:
-        name: debug
-        path: app/build/outputs/apk/debug/app-debug.apk
+        name: ${{ matrix.build.name }}
+        path: app/build/outputs/apk/${{ matrix.build.name }}/app-${{ matrix.build.name }}.apk
         compression-level: 9
