@@ -19,3 +19,8 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Keep data classes
+-keep class io.github.kowx712.mmuautoqr.models.User { *; }
+-keep class io.github.kowx712.mmuautoqr.utils.EncryptionUtils { *; }
+-keep class io.github.kowx712.mmuautoqr.utils.UserManager { *; }
