@@ -1,140 +1,212 @@
 package io.github.kowx712.mmuautoqr
 
 import android.Manifest
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.People
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import androidx.core.view.WindowCompat
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.*
+import io.github.kowx712.mmuautoqr.ui.screens.MainScreen
+import io.github.kowx712.mmuautoqr.ui.screens.UserScreen
 import io.github.kowx712.mmuautoqr.ui.theme.AutoqrTheme
 import io.github.kowx712.mmuautoqr.utils.UserManager
+import io.github.kowx712.mmuautoqr.viewmodels.HomeViewModel
+import io.github.kowx712.mmuautoqr.viewmodels.HomeViewModelFactory
+import io.github.kowx712.mmuautoqr.viewmodels.UserOperationFeedback
+import io.github.kowx712.mmuautoqr.viewmodels.UserViewModel
+import io.github.kowx712.mmuautoqr.viewmodels.UserViewModelFactory
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+
+sealed class BottomNavItem(
+    val route: String,
+    val titleResId: Int,
+    val filledIcon: ImageVector,
+    val outlinedIcon: ImageVector
+) {
+    object Home : BottomNavItem("home", R.string.bottom_nav_home, Icons.Filled.Home, Icons.Outlined.Home)
+    object Users : BottomNavItem("users", R.string.bottom_nav_users, Icons.Filled.People, Icons.Outlined.People)
+}
+
+val bottomNavItems = listOf(
+    BottomNavItem.Home,
+    BottomNavItem.Users
+)
 
 class MainActivity : ComponentActivity() {
     private lateinit var userManager: UserManager
 
     private val requestCameraPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-            if (isGranted) {
-                Toast.makeText(this, getString(R.string.camera_permission_granted), Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, getString(R.string.camera_permission_required), Toast.LENGTH_LONG).show()
-            }
+            Toast.makeText(this, getString(R.string.camera_permission_required), Toast.LENGTH_LONG).show()
         }
 
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun onCreate(savedInstanceState: Bundle?) {
         userManager = UserManager(this)
 
-        val currentActiveUserCount = userManager.activeUserCount
-        val cameraPermissionAlreadyGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-
-        if (currentActiveUserCount > 0 && cameraPermissionAlreadyGranted) {
-            startActivity(Intent(this, QRScannerActivity::class.java))
-        }
+        val homeViewModelFactory = HomeViewModelFactory(userManager)
+        val userViewModelFactory = UserViewModelFactory(userManager)
+        val hasCameraPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
         enableEdgeToEdge()
         window.isNavigationBarContrastEnforced = false
-
         super.onCreate(savedInstanceState)
+
+        if (!hasCameraPermission) {
+            requestCameraPermission.launch(Manifest.permission.CAMERA)
+        }
+
+        lifecycleScope.launch {
+            if (userManager.getActiveUserCount() > 0) {
+                startActivity(Intent(this@MainActivity, QRScannerActivity::class.java))
+            }
+        }
 
         setContent {
             AutoqrTheme {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    val dark = isSystemInDarkTheme()
-                    SideEffect {
-                        val controller = WindowCompat.getInsetsController(window, window.decorView)
-                        controller.isAppearanceLightStatusBars = !dark
-                        controller.isAppearanceLightNavigationBars = !dark
-                    }
-                    var totalUsers by remember { mutableStateOf(0) }
-                    var activeUsers by remember { mutableStateOf(0) }
+                val navController = rememberNavController()
+                val navBackStackEntry by navController.currentBackStackEntryAsState()
+                val context = LocalContext.current
+                val activity = context as? Activity
 
-                    LaunchedEffect(Unit) {
-                        totalUsers = userManager.userCount
-                        activeUsers = userManager.activeUserCount
-                        if (!cameraPermissionAlreadyGranted) {
-                            checkCameraPermission()
-                        }
-                    }
-
-                    val lifecycleOwner = LocalLifecycleOwner.current
-                    DisposableEffect(lifecycleOwner) {
-                        val observer = LifecycleEventObserver { _, event ->
-                            if (event == Lifecycle.Event.ON_RESUME) {
-                                totalUsers = userManager.userCount
-                                activeUsers = userManager.activeUserCount
+                Scaffold(
+                    contentWindowInsets = WindowInsets.systemBars,
+                    bottomBar = {
+                        NavigationBar {
+                            val currentDestination = navBackStackEntry?.destination
+                            bottomNavItems.forEach { screen ->
+                                val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                                NavigationBarItem(
+                                    icon = {
+                                        Icon(
+                                            imageVector = if (selected) screen.filledIcon else screen.outlinedIcon,
+                                            contentDescription = stringResource(screen.titleResId)
+                                        )
+                                    },
+                                    label = { Text(stringResource(screen.titleResId)) },
+                                    selected = selected,
+                                    onClick = {
+                                        navController.navigate(screen.route) {
+                                            popUpTo(navController.graph.findStartDestination().id) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    }
+                                )
                             }
                         }
-                        lifecycleOwner.lifecycle.addObserver(observer)
-                        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+                    }
+                ) { innerPadding ->
+                    val duration = 300
+                    val currentRoute = navBackStackEntry?.destination?.route
+                    if (currentRoute == BottomNavItem.Home.route || currentRoute == BottomNavItem.Users.route) {
+                        BackHandler(enabled = true) {
+                            activity?.finishAffinity()
+                        }
                     }
 
-                    MainScreen(
-                        totalUsers = totalUsers,
-                        activeUsers = activeUsers,
-                        onRefreshStats = {
-                            totalUsers = userManager.userCount
-                            activeUsers = userManager.activeUserCount
-                        },
-                        onScanQr = {
-                            if (userManager.activeUserCount > 0) {
-                                if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                                    startActivity(Intent(this@MainActivity, QRScannerActivity::class.java))
-                                } else {
-                                    Toast.makeText(this@MainActivity, getString(R.string.camera_permission_needed), Toast.LENGTH_LONG).show()
-                                    checkCameraPermission()
+                    NavHost(
+                        navController = navController,
+                        startDestination = BottomNavItem.Home.route,
+                        modifier = Modifier.padding(innerPadding),
+                        enterTransition = { fadeIn(animationSpec = tween(duration)) },
+                        exitTransition = { fadeOut(animationSpec = tween(duration)) },
+                        popEnterTransition = { fadeIn(animationSpec = tween(duration)) },
+                        popExitTransition = { fadeOut(animationSpec = tween(duration)) }
+                    ) {
+                        composable(BottomNavItem.Home.route) {
+                            val homeViewModel: HomeViewModel = viewModel(factory = homeViewModelFactory)
+                            val totalUsers by homeViewModel.totalUsers
+                            val activeUsers by homeViewModel.activeUsers
+
+                            LaunchedEffect(Unit) {
+                                homeViewModel.refreshStats()
+                            }
+
+                            MainScreen(
+                                totalUsers = totalUsers,
+                                activeUsers = activeUsers,
+                                onRefreshStats = {
+                                    homeViewModel.refreshStats()
+                                },
+                                onScanQr = {
+                                    if (activeUsers > 0) {
+                                        if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                                            startActivity(Intent(this@MainActivity, QRScannerActivity::class.java))
+                                        } else {
+                                            Toast.makeText(this@MainActivity, getString(R.string.camera_permission_needed), Toast.LENGTH_LONG).show()
+                                        }
+                                    } else {
+                                        Toast.makeText(this@MainActivity, getString(R.string.add_users_first), Toast.LENGTH_LONG).show()
+                                        navController.navigate(BottomNavItem.Users.route)
+                                    }
                                 }
-                            } else {
-                                // This case should ideally not be hit if button is disabled.
-                                Toast.makeText(
-                                    this@MainActivity,
-                                    getString(R.string.add_users_first),
-                                    Toast.LENGTH_LONG
-                                ).show()
-                                startActivity(Intent(this@MainActivity, UserManagementActivity::class.java))
-                            }
-                        },
-                        onManageUsers = {
-                            startActivity(Intent(this@MainActivity, UserManagementActivity::class.java))
+                            )
                         }
-                    )
+                        composable(BottomNavItem.Users.route) {
+                            val userViewModel: UserViewModel = viewModel(factory = userViewModelFactory)
+                            val usersList by userViewModel.usersList
+
+                            LaunchedEffect(Unit) {
+                                userViewModel.operationFeedback.collectLatest { feedback ->
+                                    val message = when (feedback) {
+                                        is UserOperationFeedback.Success -> getString(feedback.messageResId)
+                                        is UserOperationFeedback.Error -> getString(feedback.messageResId)
+                                    }
+                                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                                }
+                            }
+
+                            UserScreen(
+                                users = usersList,
+                                onAddUser = { name, userId, password ->
+                                    userViewModel.addUser(name, userId, password)
+                                },
+                                onUpdateUser = { user, name, password ->
+                                    userViewModel.updateUser(user, name, password)
+                                },
+                                onDeleteUser = { user ->
+                                    userViewModel.deleteUser(user)
+                                },
+                                onToggleUserStatus = { userToToggle ->
+                                    userViewModel.toggleUserStatus(userToToggle)
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -142,119 +214,5 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-    }
-
-    private fun checkCameraPermission() {
-        val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-        if (!granted) {
-            requestCameraPermission.launch(Manifest.permission.CAMERA)
-        }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun MainScreenPreview() {
-    MainScreen(
-        totalUsers = 2,
-        activeUsers = 2,
-        onRefreshStats = {},
-        onScanQr = {},
-        onManageUsers = {}
-    )
-}
-
-@Composable
-private fun MainScreen(
-    totalUsers: Int,
-    activeUsers: Int,
-    onRefreshStats: () -> Unit,
-    onScanQr: () -> Unit,
-    onManageUsers: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .safeDrawingPadding()
-            .padding(horizontal = 24.dp)
-            .padding(top = 26.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.Top,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = stringResource(R.string.main_screen_title),
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.primary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Text(
-            text = stringResource(R.string.app_description),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp, bottom = 28.dp)
-        )
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-        ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Text(
-                    text = stringResource(R.string.user_statistics),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = stringResource(R.string.total_users, totalUsers),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 12.dp)
-                )
-                Text(
-                    text = stringResource(R.string.active_users, activeUsers),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.tertiary,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-        }
-
-        Button(
-            onClick = { onScanQr(); onRefreshStats() },
-            enabled = activeUsers > 0,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 28.dp)
-        ) {
-            Text(text = stringResource(R.string.scan_qr_code))
-        }
-
-        Button(
-            onClick = { onManageUsers() },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp, bottom = 28.dp)
-        ) {
-            Text(text = stringResource(R.string.manage_users))
-        }
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.main_screen_instructions_text),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(16.dp)
-            )
-        }
     }
 }

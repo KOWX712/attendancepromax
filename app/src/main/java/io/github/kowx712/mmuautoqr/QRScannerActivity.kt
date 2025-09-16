@@ -177,7 +177,6 @@ class QRScannerActivity : ComponentActivity() {
             camera = cameraProvider.bindToLifecycle(this, cameraSelector, previewUseCase, analysisUseCase)
         } catch (_: Exception) { }
 
-        // Attach the previewView to content by updating composition local state
         runOnUiThread {
             setContent {
                 enableEdgeToEdge()

@@ -2,8 +2,6 @@ package io.github.kowx712.mmuautoqr
 
 import android.annotation.SuppressLint
 import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -13,9 +11,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +24,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -62,10 +60,18 @@ class WebViewActivity : ComponentActivity() {
     @Composable
     private fun WebViewScreen() {
         val userManager = remember { UserManager(this@WebViewActivity) }
-        val activeUsers = remember { userManager.activeUsers }
+        var activeUsers by remember { mutableStateOf<List<User>>(emptyList()) }
+        var isLoadingUsers by remember { mutableStateOf(true) }
+
+        LaunchedEffect(key1 = userManager) {
+            isLoadingUsers = true
+            activeUsers = userManager.getUsers().filter { it.isActive }
+            isLoadingUsers = false
+        }
+
         var currentUserIndex by remember { mutableIntStateOf(0) }
         var statusText by remember { mutableStateOf(getString(R.string.loading_attendance_page)) }
-        var isLoading by remember { mutableStateOf(true) }
+        var isLoadingPage by remember { mutableStateOf(true) }
         val attendanceUrl = remember {
             if (intent.action == Intent.ACTION_VIEW) {
                 intent.dataString ?: ""
@@ -74,6 +80,14 @@ class WebViewActivity : ComponentActivity() {
             }
         }
         var initialLoginCanProceed by remember { mutableStateOf(false) }
+
+        if (isLoadingUsers) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+                Text(getString(R.string.loading), modifier = Modifier.padding(top = 60.dp))
+            }
+            return
+        }
 
         if (activeUsers.isEmpty()) {
             LaunchedEffect(Unit) {
@@ -91,8 +105,7 @@ class WebViewActivity : ComponentActivity() {
                 AttendanceWebView(
                     url = attendanceUrl,
                     onPageFinished = {
-                        isLoading = false
-                        // Delay to ensure page ready
+                        isLoadingPage = false
                         mainHandler.postDelayed({
                             initialLoginCanProceed = true
                         }, 2000)
@@ -101,31 +114,36 @@ class WebViewActivity : ComponentActivity() {
                         webView.addJavascriptInterface(object : Any() {
                             @JavascriptInterface
                             fun onLoginSubmitted() {
-                                // Capture the index of the user for whom login was submitted
                                 val submittedUserIndex = currentUserIndex
-                                val currentUser = activeUsers[submittedUserIndex]
-                                mainHandler.postDelayed({
-                                    statusText = getString(R.string.login_submitted, currentUser.name)
+                                if (submittedUserIndex < activeUsers.size) {
+                                    val currentUser = activeUsers[submittedUserIndex]
                                     mainHandler.postDelayed({
-                                        proceedToNextUser(activeUsers, submittedUserIndex) { nextIndex ->
-                                            currentUserIndex = nextIndex
-                                        }
-                                    }, 3000)
-                                }, 100)
+                                        statusText = getString(R.string.login_submitted, currentUser.name)
+                                        mainHandler.postDelayed({
+                                            proceedToNextUser(activeUsers, submittedUserIndex) { nextIndex ->
+                                                currentUserIndex = nextIndex
+                                                initialLoginCanProceed = true
+                                            }
+                                        }, 3000)
+                                    }, 100)
+                                }
                             }
 
                             @JavascriptInterface
                             fun onLoginFailed(reason: String) {
                                 val failedUserIndex = currentUserIndex
-                                val currentUser = activeUsers[failedUserIndex]
-                                mainHandler.post {
-                                    Toast.makeText(this@WebViewActivity, getString(R.string.login_failed, reason), Toast.LENGTH_SHORT).show()
-                                    statusText = getString(R.string.login_failed, currentUser.name)
-                                    mainHandler.postDelayed({
-                                        proceedToNextUser(activeUsers, failedUserIndex) { nextIndex ->
-                                            currentUserIndex = nextIndex
-                                        }
-                                    }, 2000)
+                                if (failedUserIndex < activeUsers.size) {
+                                    val currentUser = activeUsers[failedUserIndex]
+                                    mainHandler.post {
+                                        Toast.makeText(this@WebViewActivity, getString(R.string.login_failed, reason), Toast.LENGTH_SHORT).show()
+                                        statusText = getString(R.string.login_failed, currentUser.name)
+                                        mainHandler.postDelayed({
+                                            proceedToNextUser(activeUsers, failedUserIndex) { nextIndex ->
+                                                currentUserIndex = nextIndex
+                                                initialLoginCanProceed = true
+                                            }
+                                        }, 1000)
+                                    }
                                 }
                             }
                         }, "Android")
@@ -133,6 +151,7 @@ class WebViewActivity : ComponentActivity() {
                     onEvaluateLogin = { webView ->
                         if (currentUserIndex < activeUsers.size) {
                             val user = activeUsers[currentUserIndex]
+                            initialLoginCanProceed = false
                             val js = "javascript:" +
                                     "function fillAndSubmit(user, pass) {" +
                                     "  var userField = document.querySelector('input[type=\"text\"], input[name*=\"user\"], input[id*=\"user\"], input[placeholder*=\"User\"]');" +
@@ -163,7 +182,7 @@ class WebViewActivity : ComponentActivity() {
                     canTriggerLogin = initialLoginCanProceed
                 )
 
-                if (isLoading) {
+                if (isLoadingPage) {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 }
             }
@@ -178,14 +197,13 @@ class WebViewActivity : ComponentActivity() {
         }
     }
 
-    private fun proceedToNextUser(activeUsers: List<User>, current: Int, onIndex: (Int) -> Unit) {
+    private fun proceedToNextUser(activeUsersList: List<User>, current: Int, onIndex: (Int) -> Unit) {
         val next = current + 1
-
-        if (next < activeUsers.size) {
+        if (next < activeUsersList.size) {
             onIndex(next)
         } else {
             Toast.makeText(this, getString(R.string.attendance_automation_completed), Toast.LENGTH_LONG).show()
-            mainHandler.postDelayed({ finish() }, 3000)
+            finish()
         }
     }
 }
@@ -208,10 +226,6 @@ private fun AttendanceWebView(
                 override fun onPageFinished(view: WebView, url: String) {
                     super.onPageFinished(view, url)
                     onPageFinished()
-                }
-
-                override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-                    super.onPageStarted(view, url, favicon)
                 }
             }
             onProvideWebView(this)

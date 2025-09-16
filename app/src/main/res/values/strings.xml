@@ -33,7 +33,6 @@
 
     <!-- Messages -->
     <string name="camera_permission_required">Camera permission is required to scan QR code</string>
-    <string name="camera_permission_granted">Camera permission granted</string>
     <string name="camera_permission_needed">Camera permission needed. Please grant it.</string>
     <string name="qr_scanned_success">QR Code scanned successfully!</string>
     <string name="invalid_qr_code">Invalid QR code. Please scan a valid attendance URL.</string>
@@ -82,8 +81,11 @@
     <string name="delete_user_message">Are you sure you want to delete %1$s?</string>
     <string name="clear_all_users_title">Clear All Users</string>
     <string name="clear_all_users_message">Are you sure you want to delete all users? This action cannot be undone.</string>
-    <string name="clear_all_users_button">Clear All</string>
-    <string name="no_users_to_clear">No users to clear</string>
-    <string name="all_users_cleared">All users cleared</string>
+    <string name="bottom_nav_home">Home</string>
+    <string name="bottom_nav_users">Users</string>
+    <string name="failed_to_update_user">Failed to update user</string>
+    <string name="failed_to_delete_user">Failed to delete user</string>
+    <string name="hide_password">Hide password</string>
+    <string name="show_password">Show password</string>
 
 </resources>

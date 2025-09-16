@@ -16,3 +16,4 @@ local.properties
 keystore.properties
 release.keystore
 test
+.idea/deviceManager.xml

@@ -50,11 +50,6 @@
             </intent-filter>
         </activity>
 
-        <activity
-            android:name=".UserManagementActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
         <service
             android:name=".tileservice.MainTileService"
             android:exported="true"
