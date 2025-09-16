@@ -199,7 +199,8 @@ class QRScannerActivity : ComponentActivity() {
         val lower = url.lowercase()
         val starts = lower.startsWith("http://") || lower.startsWith("https://")
         val contains = lower.contains("clic") || lower.contains("osc.mmu.edu.my")
-        return starts && contains
+        val debugging = url.contains("192.168")
+        return starts && contains || debugging
     }
 
     private fun initializeScanSound() {
