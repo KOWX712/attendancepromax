@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.graphics.ImageFormat
 import android.media.AudioManager
 import android.media.ToneGenerator
+import android.os.Build
 import android.os.Bundle
 import android.view.HapticFeedbackConstants
 import android.widget.Toast
@@ -13,6 +14,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -77,14 +79,17 @@ class QRScannerActivity : ComponentActivity() {
             }
         }
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
+        window.isNavigationBarContrastEnforced = false
+
         super.onCreate(savedInstanceState)
         initializeScanSound()
         cameraExecutor = Executors.newSingleThreadExecutor()
         multiFormatReader = MultiFormatReader()
 
         setContent {
-            enableEdgeToEdge()
             AutoqrTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     ScannerScreen(

@@ -1,12 +1,10 @@
 package io.github.kowx712.mmuautoqr
 
 import android.annotation.SuppressLint
-import android.graphics.Color
 import android.os.Bundle
 import android.view.HapticFeedbackConstants
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.combinedClickable
@@ -65,16 +63,12 @@ import kotlinx.coroutines.delay
 class UserManagementActivity : ComponentActivity() {
     @SuppressLint("MutableCollectionMutableState")
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
+        window.isNavigationBarContrastEnforced = false
+
         super.onCreate(savedInstanceState)
         val userManager = UserManager(this)
         setContent {
-            val darkTheme = isSystemInDarkTheme()
-            enableEdgeToEdge(
-                statusBarStyle = SystemBarStyle.auto(
-                    Color.TRANSPARENT,
-                    Color.TRANSPARENT
-                ) { !darkTheme }
-            )
             AutoqrTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     val dark = isSystemInDarkTheme()

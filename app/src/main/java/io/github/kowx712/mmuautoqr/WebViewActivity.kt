@@ -40,22 +40,11 @@ import io.github.kowx712.mmuautoqr.utils.UserManager
 class WebViewActivity : ComponentActivity() {
     private lateinit var mainHandler: Handler
 
-    private fun startAutoLogin(activeUsers: List<User>, currentIndex: Int) {
-        // Triggered via onPageFinished -> onEvaluateLogin in the WebView composable
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         mainHandler = Handler(Looper.getMainLooper())
 
         setContent {
-            val darkTheme = isSystemInDarkTheme()
-            enableEdgeToEdge(
-                statusBarStyle = SystemBarStyle.auto(
-                    Color.TRANSPARENT,
-                    Color.TRANSPARENT
-                ) { !darkTheme }
-            )
             AutoqrTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     val dark = isSystemInDarkTheme()
