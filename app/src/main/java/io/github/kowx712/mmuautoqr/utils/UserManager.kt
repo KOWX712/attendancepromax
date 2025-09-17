@@ -2,6 +2,7 @@ package io.github.kowx712.mmuautoqr.utils
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.core.content.edit
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -16,12 +17,44 @@ class UserManager(context: Context) {
 
     private var _cachedUsers: MutableList<User>? = null
 
+    private companion object {
+        private const val TAG = "UserManager"
+        private const val ENCRYPTION_KEY_PREFS_KEY = "user_manager_encryption_key_v1"
+        private const val USERS_LIST_PREFS_KEY = "users_list_encrypted_v1"
+    }
+
+    private val encryptionKey: String
+
+    init {
+        val storedKey = sharedPreferences.getString(ENCRYPTION_KEY_PREFS_KEY, null)
+        if (storedKey != null) {
+            this.encryptionKey = storedKey
+        } else {
+            val generatedKey = EncryptionUtils.generateKey()
+            if (generatedKey != null) {
+                this.encryptionKey = generatedKey
+                sharedPreferences.edit { putString(ENCRYPTION_KEY_PREFS_KEY, generatedKey) }
+            } else {
+                Log.e(TAG, "Failed to generate encryption key for UserManager. Data security cannot be ensured.")
+                throw IllegalStateException("Failed to generate encryption key for UserManager. Data security cannot be ensured.")
+            }
+        }
+    }
+
     suspend fun getUsers(): List<User> = withContext(Dispatchers.IO) {
         _cachedUsers?.toList()?.let { return@withContext it }
-        val json = sharedPreferences.getString("users_list", null)
-        val loadedUsers: MutableList<User> = if (json != null && json.isNotEmpty()) {
+
+        val encryptedJson = sharedPreferences.getString(USERS_LIST_PREFS_KEY, null)
+        val loadedUsers: MutableList<User> = if (encryptedJson != null && encryptedJson.isNotEmpty()) {
+            val json = EncryptionUtils.decrypt(encryptedJson, encryptionKey)
             val type = object : TypeToken<MutableList<User>>() {}.type
-            gson.fromJson(json, type) ?: mutableListOf()
+            try {
+                gson.fromJson(json, type) ?: mutableListOf()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error parsing users JSON from SharedPreferences. Clearing user data.", e)
+                clearAllUsers()
+                mutableListOf()
+            }
         } else {
             mutableListOf()
         }
@@ -35,7 +68,8 @@ class UserManager(context: Context) {
 
     private suspend fun saveUsersToPrefs(usersToSave: List<User>) = withContext(Dispatchers.IO) {
         val json = gson.toJson(usersToSave)
-        sharedPreferences.edit { putString("users_list", json) }
+        val encryptedJson = EncryptionUtils.encrypt(json, encryptionKey)
+        sharedPreferences.edit { putString(USERS_LIST_PREFS_KEY, encryptedJson) }
     }
 
     suspend fun addUser(name: String, userId: String, password: String): Boolean {
