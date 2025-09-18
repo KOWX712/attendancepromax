@@ -1,4 +1,4 @@
-package io.github.kowx712.mmuautoqr.viewmodels
+package io.github.kowx712.mmuautoqr.viewmodel
 
 import android.annotation.SuppressLint
 import androidx.compose.runtime.State

@@ -1,4 +1,4 @@
-package io.github.kowx712.mmuautoqr.viewmodels
+package io.github.kowx712.mmuautoqr.viewmodel
 
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableIntStateOf

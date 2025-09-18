@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -96,41 +97,47 @@ fun UserScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .padding(horizontal = 16.dp)
+            .padding(top = 16.dp, bottom = 0.dp)
     ) {
         Text(
             text = stringResource(R.string.user_management),
             style = MaterialTheme.typography.headlineMedium,
             modifier = Modifier.padding(bottom = 8.dp)
         )
-        LazyColumn(modifier = Modifier.weight(1f).padding(bottom = 16.dp)) {
-            items(users, key = { it.id }) { user ->
-                UserRow(
-                    user = user,
-                    onEdit = { toEdit -> editUser = toEdit },
-                    onRequestDelete = { toDelete -> userToDelete = toDelete },
-                    onToggle = { toToggle ->
-                        onToggleUserStatus(toToggle)
-                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                    }
-                )
+
+        Box(modifier = Modifier.weight(1f)) {
+            LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 128.dp)) {
+                items(users, key = { it.id }) { user ->
+                    UserRow(
+                        user = user,
+                        onEdit = { toEdit -> editUser = toEdit },
+                        onRequestDelete = { toDelete -> userToDelete = toDelete },
+                        onToggle = { toToggle ->
+                            onToggleUserStatus(toToggle)
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        }
+                    )
+                }
             }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            horizontalArrangement = Arrangement.End
-        ) {
-            Button(
-                onClick = { showAddDialog = true },
-                modifier = Modifier.size(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                contentPadding = PaddingValues(0.dp)
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.End
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Add,
-                    contentDescription = stringResource(R.string.add_user),
-                    modifier = Modifier.size(36.dp)
-                )
+                Button(
+                    onClick = { showAddDialog = true },
+                    modifier = Modifier.size(56.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Add,
+                        contentDescription = stringResource(R.string.add_user),
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
             }
         }
     }
@@ -139,8 +146,10 @@ fun UserScreen(
         ShowUserDialog(
             onDismiss = { showAddDialog = false },
             onConfirmAction = { nameArg, userIdArg, passwordArg ->
-                if (onAddUser(nameArg, userIdArg, passwordArg)) {
-                    showAddDialog = false
+                scope.launch {
+                    if (onAddUser(nameArg, userIdArg, passwordArg)) {
+                        showAddDialog = false
+                    }
                 }
             }
         )
@@ -151,8 +160,10 @@ fun UserScreen(
             initial = userToEdit,
             onDismiss = { editUser = null },
             onConfirmAction = { nameArg, _, passwordArg ->
-                if (onUpdateUser(userToEdit, nameArg, passwordArg)) {
-                    editUser = null
+                scope.launch {
+                    if (onUpdateUser(userToEdit, nameArg, passwordArg)) {
+                        editUser = null
+                    }
                 }
             }
         )
@@ -267,7 +278,7 @@ private fun ShowUserDialog(
                         if (userIdTextState.isBlank() || userIdTextState.length < 3) { return@launch }
                         if (password.isBlank() || password.length < 4) { return@launch }
                     } else {
-                        if (password.isBlank() || password.length < 4) { return@launch }
+                        if (password.isNotBlank() && password.length < 4) { return@launch }
                     }
                     onConfirmAction(name.trim(), effectiveUserId, password.trim())
                 }
