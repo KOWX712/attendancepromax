@@ -3,7 +3,6 @@ package io.github.kowx712.mmuautoqr
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.ImageFormat
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Build
@@ -14,9 +13,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.OptIn
 import androidx.annotation.RequiresApi
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview as CameraPreview
@@ -53,14 +54,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.google.common.util.concurrent.ListenableFuture
-import com.google.zxing.BinaryBitmap
-import com.google.zxing.MultiFormatReader
-import com.google.zxing.NotFoundException
-import com.google.zxing.PlanarYUVLuminanceSource
-import com.google.zxing.Result
-import com.google.zxing.common.HybridBinarizer
+import com.google.mlkit.vision.barcode.BarcodeScanner
+import com.google.mlkit.vision.barcode.BarcodeScannerOptions
+import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.common.InputImage
 import io.github.kowx712.mmuautoqr.ui.theme.AutoqrTheme
-import java.nio.ByteBuffer
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -68,16 +67,22 @@ class QRScannerActivity : ComponentActivity() {
     private var toneGenerator: ToneGenerator? = null
     private var camera: Camera? = null
     private var cameraExecutor: ExecutorService? = null
-    private var multiFormatReader: MultiFormatReader? = null
+    private var barcodeScanner: BarcodeScanner? = null
     private var cameraProviderFuture: ListenableFuture<ProcessCameraProvider>? = null
 
     private val requestCameraPermission =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-            if (isGranted) startCamera() else {
-                Toast.makeText(this, getString(R.string.camera_permission_required), Toast.LENGTH_LONG).show()
-                finish()
+            registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+                if (isGranted) startCamera()
+                else {
+                    Toast.makeText(
+                                this,
+                                getString(R.string.camera_permission_required),
+                                Toast.LENGTH_LONG
+                        )
+                            .show()
+                    finish()
+                }
             }
-        }
 
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -87,68 +92,57 @@ class QRScannerActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         initializeScanSound()
         cameraExecutor = Executors.newSingleThreadExecutor()
-        multiFormatReader = MultiFormatReader()
+
+        val options =
+                BarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
+        barcodeScanner = BarcodeScanning.getClient(options)
 
         setContent {
             AutoqrTheme {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    ScannerScreen(
-                        onReady = {
-                            checkPermissionAndStart()
-                        }
-                    )
-                }
+                Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                ) { ScannerScreen(onReady = { checkPermissionAndStart() }) }
             }
         }
     }
 
     private fun checkPermissionAndStart() {
-        val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        val granted =
+                ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
+                        PackageManager.PERMISSION_GRANTED
         if (granted) startCamera() else requestCameraPermission.launch(Manifest.permission.CAMERA)
     }
 
     private fun startCamera() {
         cameraProviderFuture = ProcessCameraProvider.getInstance(this)
-        cameraProviderFuture?.addListener({
-            val provider = cameraProviderFuture?.get() ?: return@addListener
-            bindPreviewAndAnalysis(provider)
-        }, ContextCompat.getMainExecutor(this))
+        cameraProviderFuture?.addListener(
+                {
+                    val provider = cameraProviderFuture?.get() ?: return@addListener
+                    bindPreviewAndAnalysis(provider)
+                },
+                ContextCompat.getMainExecutor(this)
+        )
     }
 
     private fun bindPreviewAndAnalysis(cameraProvider: ProcessCameraProvider) {
         val previewView = PreviewView(this)
-        val previewUseCase = CameraPreview.Builder().build().apply {
-            surfaceProvider = previewView.surfaceProvider
-        }
-        val analysisUseCase = ImageAnalysis.Builder()
-            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .build()
+        val previewUseCase =
+                CameraPreview.Builder().build().apply {
+                    surfaceProvider = previewView.surfaceProvider
+                }
+        val analysisUseCase =
+                ImageAnalysis.Builder()
+                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                        .build()
 
         var isScanning = true
 
-        analysisUseCase.setAnalyzer(cameraExecutor!!) { imageProxy: ImageProxy ->
-            if (!isScanning) {
-                imageProxy.close(); return@setAnalyzer
-            }
-            if (imageProxy.format != ImageFormat.YUV_420_888 && imageProxy.format != ImageFormat.YUV_422_888 && imageProxy.format != ImageFormat.YUV_444_888) {
-                imageProxy.close(); return@setAnalyzer
-            }
-
-            val yPlane = imageProxy.planes[0]
-            val yBuffer: ByteBuffer = yPlane.buffer
-            val yData = ByteArray(yBuffer.remaining())
-            yBuffer.get(yData)
-
-            val source = PlanarYUVLuminanceSource(
-                yData, yPlane.rowStride, imageProxy.height,
-                0, 0, yPlane.rowStride, imageProxy.height, false
-            )
-            val bitmap = BinaryBitmap(HybridBinarizer(source))
-            try {
-                val result: Result? = multiFormatReader?.decode(bitmap)
-                if (result != null && !result.text.isNullOrEmpty()) {
+        analysisUseCase.setAnalyzer(cameraExecutor!!) { imageProxy ->
+            processImageProxy(imageProxy) { result ->
+                if (isScanning && !result.isNullOrEmpty()) {
                     isScanning = false
-                    val scannedUrl = result.text.trim()
+                    val scannedUrl = result.trim()
                     runOnUiThread {
                         if (isValidUrl(scannedUrl)) {
                             playSuccessSound()
@@ -163,33 +157,60 @@ class QRScannerActivity : ComponentActivity() {
                         }
                     }
                 }
-            } catch (e: NotFoundException) {
-            } catch (e: Exception) {
-            } finally {
-                multiFormatReader?.reset()
-                imageProxy.close()
             }
         }
 
         val cameraSelector = CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_BACK).build()
         try {
             cameraProvider.unbindAll()
-            camera = cameraProvider.bindToLifecycle(this, cameraSelector, previewUseCase, analysisUseCase)
-        } catch (_: Exception) { }
+            camera = cameraProvider.bindToLifecycle(
+                this,
+                cameraSelector,
+                previewUseCase,
+                analysisUseCase
+            )
+        } catch (_: Exception) {}
 
         runOnUiThread {
             setContent {
                 enableEdgeToEdge()
                 AutoqrTheme {
                     Surface(modifier = Modifier.fillMaxSize()) {
-                        ScannerScreen(previewView = previewView, onReady = { }, onScale = { scale ->
-                            val state = camera?.cameraInfo?.zoomState?.value ?: return@ScannerScreen
-                            val newRatio = (state.zoomRatio * scale).coerceIn(state.minZoomRatio, state.maxZoomRatio)
-                            camera?.cameraControl?.setZoomRatio(newRatio)
-                        })
+                        ScannerScreen(
+                            previewView = previewView,
+                            onReady = {},
+                            onScale = { scale ->
+                                val state = camera?.cameraInfo?.zoomState?.value ?: return@ScannerScreen
+                                val newRatio = (state.zoomRatio * scale).coerceIn(
+                                    state.minZoomRatio,
+                                    state.maxZoomRatio
+                                )
+                                camera?.cameraControl?.setZoomRatio(newRatio)
+                            }
+                        )
                     }
                 }
             }
+        }
+    }
+
+    @OptIn(ExperimentalGetImage::class)
+    private fun processImageProxy(imageProxy: ImageProxy, onResult: (String?) -> Unit) {
+        val mediaImage = imageProxy.image
+        if (mediaImage != null) {
+            val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
+            barcodeScanner
+                ?.process(image)
+                ?.addOnSuccessListener { barcodes ->
+                    val rawValue = barcodes.firstOrNull()?.rawValue
+                    onResult(rawValue)
+                }
+                ?.addOnFailureListener {
+                    // Handle failure
+                }
+                ?.addOnCompleteListener { imageProxy.close() }
+        } else {
+            imageProxy.close()
         }
     }
 
@@ -214,14 +235,14 @@ class QRScannerActivity : ComponentActivity() {
         try {
             toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 200)
             window.decorView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-        } catch (_: Exception) { }
+        } catch (_: Exception) {}
     }
 
     override fun onDestroy() {
         super.onDestroy()
         toneGenerator?.release()
         cameraExecutor?.shutdown()
-        multiFormatReader?.reset()
+        barcodeScanner?.close()
     }
 }
 
@@ -232,16 +253,20 @@ private fun ScannerScreenPreview() {
 }
 
 @Composable
-private fun ScannerScreen(previewView: PreviewView? = null, onReady: () -> Unit, onScale: (Float) -> Unit = {}) {
+private fun ScannerScreen(
+    previewView: PreviewView? = null,
+    onReady: () -> Unit,
+    onScale: (Float) -> Unit = {}
+) {
     LaunchedEffect(Unit) { onReady() }
 
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .pointerInput(Unit) {
-            detectTransformGestures { _, _, zoom, _ ->
-                if (zoom != 1f) onScale(zoom)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectTransformGestures { _, _, zoom, _ -> if (zoom != 1f) onScale(zoom)
+                }
             }
-        }
     ) {
         // Camera preview
         AndroidView(
@@ -401,7 +426,11 @@ private fun ScanningFrame(modifier: Modifier = Modifier) {
         )
 
         // Bottom Right
-        val brArcTopLeft = Offset(size.width - cornerRadius * 2 + halfThickness, size.height - cornerRadius * 2 + halfThickness)
+        val brArcTopLeft =
+            Offset(
+                size.width - cornerRadius * 2 + halfThickness,
+                size.height - cornerRadius * 2 + halfThickness
+            )
         drawArc(
             color = Color.White,
             startAngle = 0f,
