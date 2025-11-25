@@ -10,7 +10,10 @@ import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.People
@@ -76,13 +79,14 @@ class MainActivity : ComponentActivity() {
                 Scaffold(
                     bottomBar = {
                         BottomNav(navController = navController)
-                    }
-                ) { innerPadding ->
-                    val duration = 300
+                    },
+                    contentWindowInsets = WindowInsets.navigationBars
+                ) {
+                    val duration = 240
                     NavHost(
                         navController = navController,
                         startDestination = BottomNavItem.Home.route,
-                        modifier = Modifier.padding(innerPadding),
+                        modifier = Modifier.padding(bottom = it.calculateBottomPadding()),
                         enterTransition = { fadeIn(animationSpec = tween(duration)) },
                         exitTransition = { fadeOut(animationSpec = tween(duration)) },
                     ) {

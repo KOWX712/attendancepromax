@@ -17,3 +17,4 @@ keystore.properties
 release.keystore
 test
 .idea/deviceManager.xml
+.kotlin
