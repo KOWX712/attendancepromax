@@ -70,7 +70,7 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
-    implementation(libs.mlkit.barcode.scanning)
+    implementation(libs.play.services.mlkit.barcode.scanning)
     implementation(libs.gson)
     implementation(libs.androidx.webkit)
     implementation(libs.androidx.appcompat)
