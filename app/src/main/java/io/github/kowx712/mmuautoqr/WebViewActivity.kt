@@ -152,30 +152,38 @@ class WebViewActivity : ComponentActivity() {
                         if (currentUserIndex < activeUsers.size) {
                             val user = activeUsers[currentUserIndex]
                             initialLoginCanProceed = false
-                            val js = "javascript:" +
-                                    "function fillAndSubmit(user, pass) {" +
-                                    "  var userField = document.querySelector('input[type=\"text\"], input[name*=\"user\"], input[id*=\"user\"], input[placeholder*=\"User\"]');" +
-                                    "  var passField = document.querySelector('input[type=\"password\"]');" +
-                                    "  var submitBtn = document.querySelector('input[type=\"submit\"], button[type=\"submit\"], input[value*=\"Sign\"], button');" +
-                                    "  " +
-                                    "  if (userField && passField) {" +
-                                    "    userField.value = '';" +
-                                    "    passField.value = '';" +
-                                    "    setTimeout(function() {" +
-                                    "      userField.value = user;" +
-                                    "      passField.value = pass;" +
-                                    "      if (submitBtn) {" +
-                                    "        submitBtn.click();" +
-                                    "        Android.onLoginSubmitted();" +
-                                    "      } else {" +
-                                    "        Android.onLoginFailed('Submit button not found');" +
-                                    "      }" +
-                                    "    }, 500);" +
-                                    "  } else {" +
-                                    "    Android.onLoginFailed('Login fields not found');" +
-                                    "  }" +
-                                    "}" +
-                                    "fillAndSubmit('" + user.userId + "', '" + user.password + "');";
+                            val escUser = user.userId.replace("'", "\\'")
+                            val escPass = user.password.replace("'", "\\'")
+                            val js = """
+                                javascript:
+                                function fillAndSubmit(user, pass, retryCount) {
+                                  if (retryCount > 80) {
+                                    Android.onLoginFailed('Login fields not found after retries');
+                                    return;
+                                  }
+                                  var userField = document.querySelector('input[type="text"], input[name*="user"], input[id*="user"], input[placeholder*="User"]');
+                                  var passField = document.querySelector('input[type="password"]');
+                                  var submitBtn = document.querySelector('input[type="submit"], button[type="submit"], input[value*="Sign"], button');
+
+                                  if (userField && passField) {
+                                    userField.value = '';
+                                    passField.value = '';
+                                    setTimeout(function() {
+                                      userField.value = user;
+                                      passField.value = pass;
+                                      if (submitBtn) {
+                                        submitBtn.click();
+                                        Android.onLoginSubmitted();
+                                      } else {
+                                        Android.onLoginFailed('Submit button not found');
+                                      }
+                                    }, 200);
+                                  } else {
+                                    setTimeout(function() { fillAndSubmit(user, pass, retryCount + 1); }, 100);
+                                  }
+                                }
+                                fillAndSubmit('$escUser', '$escPass', 0);
+                            """.trimIndent()
                             webView.evaluateJavascript(js, null)
                         }
                     },
