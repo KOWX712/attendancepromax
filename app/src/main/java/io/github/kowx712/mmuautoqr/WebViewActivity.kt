@@ -68,6 +68,11 @@ class WebViewActivity : ComponentActivity() {
         }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        mainHandler.removeCallbacksAndMessages(null)
+    }
+
     @Composable
     private fun WebViewScreen() {
         val userManager = remember { UserManager(this@WebViewActivity) }
@@ -296,5 +301,7 @@ private fun AttendanceWebView(
         if (url.isNotEmpty() && canTriggerLogin) {
             onEvaluateLogin(webView)
         }
+    }, onRelease = { webView ->
+        webView.destroy()
     })
 }
