@@ -6,6 +6,9 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -15,16 +18,24 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,6 +83,9 @@ class WebViewActivity : ComponentActivity() {
         var currentUserIndex by remember { mutableIntStateOf(0) }
         var statusText by remember { mutableStateOf(getString(R.string.loading_attendance_page)) }
         var isLoadingPage by remember { mutableStateOf(true) }
+        var isError by remember { mutableStateOf(false) }
+        var errorMessage by remember { mutableStateOf("") }
+        var webViewRef by remember { mutableStateOf<WebView?>(null) }
         val attendanceUrl = remember {
             if (intent.action == Intent.ACTION_VIEW) {
                 intent.dataString ?: ""
@@ -187,11 +201,31 @@ class WebViewActivity : ComponentActivity() {
                             webView.evaluateJavascript(js, null)
                         }
                     },
+                    onError = { message ->
+                        isError = true
+                        errorMessage = message
+                        isLoadingPage = false
+                    },
+                    onWebViewInstance = { webViewRef = it },
                     canTriggerLogin = initialLoginCanProceed
                 )
 
                 if (isLoadingPage) {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                }
+
+                if (isError) {
+                    Column(modifier = Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(text = errorMessage, style = MaterialTheme.typography.bodyMedium)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(onClick = {
+                            isError = false
+                            isLoadingPage = true
+                            webViewRef?.loadUrl(attendanceUrl)
+                        }) {
+                            Text("Retry")
+                        }
+                    }
                 }
             }
 
@@ -223,19 +257,36 @@ private fun AttendanceWebView(
     onPageFinished: () -> Unit,
     onProvideWebView: (WebView) -> Unit,
     onEvaluateLogin: (WebView) -> Unit,
+    onError: (String) -> Unit,
+    onWebViewInstance: (WebView) -> Unit,
     canTriggerLogin: Boolean
 ) {
     AndroidView(factory = { context ->
         WebView(context).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
-            settings.cacheMode = WebSettings.LOAD_NO_CACHE
+            settings.cacheMode = WebSettings.LOAD_DEFAULT
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView, url: String) {
                     super.onPageFinished(view, url)
                     onPageFinished()
                 }
+
+                override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                    super.onReceivedError(view, request, error)
+                    if (request?.isForMainFrame == true) {
+                        onError(error?.description?.toString() ?: "Unknown resource error")
+                    }
+                }
+
+                override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: WebResourceResponse?) {
+                    super.onReceivedHttpError(view, request, errorResponse)
+                    if (request?.isForMainFrame == true) {
+                        onError("HTTP ${errorResponse?.statusCode ?: 0}: ${errorResponse?.reasonPhrase?.toString() ?: "Unknown HTTP error"}")
+                    }
+                }
             }
+            onWebViewInstance(this)
             onProvideWebView(this)
             if (url.isNotEmpty()) {
                 loadUrl(url)
