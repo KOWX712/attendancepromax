@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.webkit.JavascriptInterface
+import android.webkit.ValueCallback
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -91,6 +92,7 @@ class WebViewActivity : ComponentActivity() {
         var isError by remember { mutableStateOf(false) }
         var errorMessage by remember { mutableStateOf("") }
         var webViewRef by remember { mutableStateOf<WebView?>(null) }
+        var hasRetriedBlank by remember { mutableStateOf(false) }
         val attendanceUrl = remember {
             if (intent.action == Intent.ACTION_VIEW) {
                 intent.dataString ?: ""
@@ -207,9 +209,15 @@ class WebViewActivity : ComponentActivity() {
                         }
                     },
                     onError = { message ->
-                        isError = true
-                        errorMessage = message
-                        isLoadingPage = false
+                        if (message == "Page loaded but appears to be blank" && !hasRetriedBlank) {
+                            hasRetriedBlank = true
+                            isLoadingPage = true
+                            webViewRef?.reload()
+                        } else {
+                            isError = true
+                            errorMessage = message
+                            isLoadingPage = false
+                        }
                     },
                     onWebViewInstance = { webViewRef = it },
                     canTriggerLogin = initialLoginCanProceed
@@ -225,6 +233,7 @@ class WebViewActivity : ComponentActivity() {
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(onClick = {
                             isError = false
+                            hasRetriedBlank = false
                             isLoadingPage = true
                             webViewRef?.loadUrl(attendanceUrl)
                         }) {
@@ -272,9 +281,16 @@ private fun AttendanceWebView(
             settings.domStorageEnabled = true
             settings.cacheMode = WebSettings.LOAD_DEFAULT
             webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView, url: String) {
+                override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
-                    onPageFinished()
+                    view?.evaluateJavascript("(document.body?.innerHTML?.length || 0)", ValueCallback<String> { result ->
+                        val length = result?.toIntOrNull() ?: 0
+                        if (length < 100) {
+                            onError("Page loaded but appears to be blank")
+                        } else {
+                            onPageFinished()
+                        }
+                    })
                 }
 
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
