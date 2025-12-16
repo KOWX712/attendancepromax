@@ -283,14 +283,14 @@ private fun AttendanceWebView(
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
-                    view?.evaluateJavascript("(document.body?.innerHTML?.length || 0)", ValueCallback<String> { result ->
+                    view?.evaluateJavascript("(document.body?.innerHTML?.length || 0)") { result ->
                         val length = result?.toIntOrNull() ?: 0
                         if (length < 100) {
                             onError("Page loaded but appears to be blank")
                         } else {
                             onPageFinished()
                         }
-                    })
+                    }
                 }
 
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
@@ -303,7 +303,7 @@ private fun AttendanceWebView(
                 override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: WebResourceResponse?) {
                     super.onReceivedHttpError(view, request, errorResponse)
                     if (request?.isForMainFrame == true) {
-                        onError("HTTP ${errorResponse?.statusCode ?: 0}: ${errorResponse?.reasonPhrase?.toString() ?: "Unknown HTTP error"}")
+                        onError("HTTP ${errorResponse?.statusCode ?: 0}: ${errorResponse?.reasonPhrase ?: "Unknown HTTP error"}")
                     }
                 }
             }

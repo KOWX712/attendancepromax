@@ -15,6 +15,10 @@ android {
     namespace = "io.github.kowx712.mmuautoqr"
     compileSdk = 36
 
+    val keystoreProperties = Properties().apply {
+        load(rootProject.file("keystore.properties").inputStream())
+    }
+
     defaultConfig {
         applicationId = "io.github.kowx712.mmuautoqr"
         minSdk = 26
@@ -27,19 +31,10 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystorePropertiesFile = project.rootDir.resolve("keystore.properties")
-            val keystoreProps = Properties()
-
-            if (keystorePropertiesFile.exists()) {
-                keystorePropertiesFile.inputStream().use { stream ->
-                    keystoreProps.load(stream)
-                }
-            }
-
-            storeFile = project.rootDir.resolve("release.keystore")
-            storePassword = keystoreProps.getProperty("storePassword")
-            keyAlias = keystoreProps.getProperty("keyAlias")
-            keyPassword = keystoreProps.getProperty("keyPassword")
+            storeFile = file(keystoreProperties["KEY_STORE_FILE"] as String)
+            storePassword = keystoreProperties["KEY_STORE_PASSWORD"] as String
+            keyAlias = keystoreProperties["KEY_ALIAS"] as String
+            keyPassword = keystoreProperties["KEY_PASSWORD"] as String
         }
     }
     buildTypes {

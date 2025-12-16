@@ -17,7 +17,7 @@ jobs:
 
     steps:
     - name: Check out
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
       with:
         fetch-depth: 1
 
@@ -29,8 +29,9 @@ jobs:
 
     - name: Setup variables
       run: |
-        echo "${{ secrets.KEYSTOREPROP }}" | base64 -d > keystore.properties
-        echo "${{ secrets.KEYSTORE }}" | base64 -d > release.keystore
+        echo "KEY_STORE_FILE=$(pwd)/key.jks" > keystore.properties
+        echo "${{ secrets.KEYSTOREPROP }}" | base64 -d >> keystore.properties
+        echo "${{ secrets.KEYSTORE }}" | base64 -d > key.jks
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
@@ -39,7 +40,7 @@ jobs:
       run: ./gradlew assemble${{ matrix.build.type }}
 
     - name: Upload ${{ matrix.build.name }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: ${{ matrix.build.name }}
         path: app/build/outputs/apk/${{ matrix.build.name }}/app-${{ matrix.build.name }}.apk
