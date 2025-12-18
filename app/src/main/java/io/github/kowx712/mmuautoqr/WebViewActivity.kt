@@ -94,6 +94,7 @@ class WebViewActivity : ComponentActivity() {
         var errorMessage by remember { mutableStateOf("") }
         var webViewRef by remember { mutableStateOf<WebView?>(null) }
         var hasRetriedBlank by remember { mutableStateOf(false) }
+        var loginRetryCount by remember { mutableIntStateOf(0) }
         val attendanceUrl = remember {
             if (intent.action == Intent.ACTION_VIEW) {
                 intent.dataString ?: ""
@@ -168,6 +169,16 @@ class WebViewActivity : ComponentActivity() {
                                     }
                                 }
                             }
+
+                            @JavascriptInterface
+                            fun onRetryLogin() {
+                                mainHandler.post {
+                                    loginRetryCount++
+                                    isLoadingPage = true
+                                    initialLoginCanProceed = false
+                                    webViewRef?.reload()
+                                }
+                            }
                         }, "Android")
                     },
                     onEvaluateLogin = { webView ->
@@ -178,9 +189,13 @@ class WebViewActivity : ComponentActivity() {
                             val escPass = user.password.replace("'", "\\'")
                             val js = """
                                 javascript:
-                                function fillAndSubmit(user, pass, retryCount) {
-                                  if (retryCount > 80) {
-                                    Android.onLoginFailed('Login fields not found after retries');
+                                function fillAndSubmit(user, pass, retryCount, loginRetryCount) {
+                                  if (retryCount > 15) {
+                                    if (loginRetryCount < 2) {
+                                      Android.onRetryLogin();
+                                    } else {
+                                      Android.onLoginFailed('Login fields not found after retries');
+                                    }
                                     return;
                                   }
                                   var userField = document.querySelector('input[type="text"], input[name*="user"], input[id*="user"], input[placeholder*="User"]');
@@ -201,10 +216,10 @@ class WebViewActivity : ComponentActivity() {
                                       }
                                     }, 200);
                                   } else {
-                                    setTimeout(function() { fillAndSubmit(user, pass, retryCount + 1); }, 100);
+                                    setTimeout(function() { fillAndSubmit(user, pass, retryCount + 1, loginRetryCount); }, 100);
                                   }
                                 }
-                                fillAndSubmit('$escUser', '$escPass', 0);
+                                fillAndSubmit('$escUser', '$escPass', 0, $loginRetryCount);
                             """.trimIndent()
                             webView.evaluateJavascript(js, null)
                         }
