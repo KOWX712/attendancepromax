@@ -178,7 +178,8 @@ class WebViewActivity : ComponentActivity() {
                             val js = """
                                 javascript:
                                 function fillAndSubmit(user, pass, retryCount) {
-                                  if (retryCount > 80) {
+                                  if (retryCount > 15) {
+                                    window.location.reload();
                                     Android.onLoginFailed('Login fields not found after retries');
                                     return;
                                   }
