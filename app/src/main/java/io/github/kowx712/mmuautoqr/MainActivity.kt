@@ -63,6 +63,7 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         window.isNavigationBarContrastEnforced = false
+        actionBar?.hide()
         super.onCreate(savedInstanceState)
 
         lifecycleScope.launch {

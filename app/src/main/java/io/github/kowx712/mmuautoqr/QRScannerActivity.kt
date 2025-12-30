@@ -89,6 +89,7 @@ class QRScannerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         window.isNavigationBarContrastEnforced = false
+        actionBar?.hide()
 
         super.onCreate(savedInstanceState)
         initializeScanSound()
