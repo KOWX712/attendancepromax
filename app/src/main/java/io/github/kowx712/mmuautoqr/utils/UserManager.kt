@@ -4,16 +4,14 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
 import androidx.core.content.edit
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import io.github.kowx712.mmuautoqr.models.User
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 
 class UserManager(context: Context) {
     private val sharedPreferences: SharedPreferences =
         context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
-    private val gson = Gson()
 
     private var _cachedUsers: MutableList<User>? = null
 
@@ -47,9 +45,8 @@ class UserManager(context: Context) {
         val encryptedJson = sharedPreferences.getString(USERS_LIST_PREFS_KEY, null)
         val loadedUsers: MutableList<User> = if (encryptedJson != null && encryptedJson.isNotEmpty()) {
             val json = EncryptionUtils.decrypt(encryptedJson, encryptionKey)
-            val type = object : TypeToken<MutableList<User>>() {}.type
             try {
-                gson.fromJson(json, type) ?: mutableListOf()
+                Json.decodeFromString<List<User>>(json).toMutableList()
             } catch (e: Exception) {
                 Log.e(TAG, "Error parsing users JSON from SharedPreferences. Clearing user data.", e)
                 clearAllUsers()
@@ -67,7 +64,7 @@ class UserManager(context: Context) {
     suspend fun getActiveUserCount(): Int = getUsers().count { it.isActive }
 
     private suspend fun saveUsersToPrefs(usersToSave: List<User>) = withContext(Dispatchers.IO) {
-        val json = gson.toJson(usersToSave)
+        val json = Json.encodeToString(usersToSave)
         val encryptedJson = EncryptionUtils.encrypt(json, encryptionKey)
         sharedPreferences.edit { putString(USERS_LIST_PREFS_KEY, encryptedJson) }
     }

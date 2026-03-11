@@ -6,7 +6,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.webkit.JavascriptInterface
-import android.webkit.ValueCallback
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -190,7 +189,7 @@ class WebViewActivity : ComponentActivity() {
                             val js = """
                                 javascript:
                                 function fillAndSubmit(user, pass, retryCount, loginRetryCount) {
-                                  if (retryCount > 15) {
+                                  if (retryCount > 10) {
                                     if (loginRetryCount < 2) {
                                       Android.onRetryLogin();
                                     } else {

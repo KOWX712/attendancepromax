@@ -8,9 +8,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -114,14 +118,22 @@ fun UserScreen(
                 title = { Text(stringResource(R.string.user_management)) },
                 scrollBehavior = scrollBehavior
             )
-        }
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { showAddDialog = true },
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_user))
+            }
+        },
+        contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(it),
-                contentPadding = PaddingValues(bottom = 88.dp) // FAB safe inset area
+                contentPadding = PaddingValues(bottom = 80.dp) // FAB safe inset area
             ) {
                 items(users, key = { it.id }) { user ->
                     UserRow(
@@ -134,15 +146,6 @@ fun UserScreen(
                         }
                     )
                 }
-            }
-            FloatingActionButton(
-                onClick = { showAddDialog = true },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Add,
-                    contentDescription = stringResource(R.string.add_user)
-                )
             }
         }
     }

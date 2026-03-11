@@ -43,5 +43,5 @@ jobs:
       uses: actions/upload-artifact@v6
       with:
         name: ${{ matrix.build.name }}
-        path: app/build/outputs/apk/${{ matrix.build.name }}/app-${{ matrix.build.name }}.apk
+        path: app/build/outputs/apk/${{ matrix.build.name }}/*.apk
         compression-level: 9
