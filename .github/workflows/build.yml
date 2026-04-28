@@ -40,7 +40,7 @@ jobs:
       run: ./gradlew assemble${{ matrix.build.type }}
 
     - name: Upload ${{ matrix.build.name }}
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ matrix.build.name }}
         path: app/build/outputs/apk/${{ matrix.build.name }}/*.apk

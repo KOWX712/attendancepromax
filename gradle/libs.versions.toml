@@ -1,21 +1,23 @@
 [versions]
-agp = "9.1.0"
-kotlin = "2.3.10"
-kotlinxSerializationJson = "1.10.0"
-composeBom = "2026.02.01"
-navigation3 = "1.1.0-alpha05"
-cameraCamera2 = "1.5.3"
+agp = "9.2.0"
+kotlin = "2.3.21"
+kotlinxSerializationJson = "1.11.0"
+composeBom = "2026.04.01"
+navigation3 = "1.1.1"
+cameraCamera2 = "1.6.0"
 playServicesMlkitBarcodeScanning = "18.3.1"
-coreKtx = "1.17.0"
+coreKtx = "1.18.0"
 lifecycleRuntimeKtx = "2.10.0"
-lifecycleViewmodelNavigation3 = "2.11.0-alpha01"
+lifecycleViewmodelNavigation3 = "2.11.0-beta01"
 webkit = "1.15.0"
+guava = "33.6.0-android"
 
 [libraries]
 androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "cameraCamera2" }
 androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "cameraCamera2" }
 androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "cameraCamera2" }
 play-services-mlkit-barcode-scanning = { module = "com.google.android.gms:play-services-mlkit-barcode-scanning", version.ref = "playServicesMlkitBarcodeScanning" }
+guava = { module = "com.google.guava:guava", version.ref = "guava" }
 
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
