@@ -5,6 +5,8 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
+import android.view.ViewGroup
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -27,6 +29,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import io.github.kowx712.mmuautoqr.models.User
 import io.github.kowx712.mmuautoqr.ui.theme.AutoqrTheme
 import io.github.kowx712.mmuautoqr.utils.UserManager
@@ -80,7 +84,7 @@ class WebViewActivity : ComponentActivity() {
         var activeUsers by remember { mutableStateOf<List<User>>(emptyList()) }
         var isLoadingUsers by remember { mutableStateOf(true) }
 
-        LaunchedEffect(key1 = userManager) {
+        LaunchedEffect(userManager) {
             isLoadingUsers = true
             activeUsers = userManager.getUsers().filter { it.isActive }
             isLoadingUsers = false
@@ -91,9 +95,9 @@ class WebViewActivity : ComponentActivity() {
         var isLoadingPage by remember { mutableStateOf(true) }
         var isError by remember { mutableStateOf(false) }
         var errorMessage by remember { mutableStateOf("") }
+        var isRefreshing by remember { mutableStateOf(false) }
+        var automationRunId by remember { mutableIntStateOf(0) }
         var webViewRef by remember { mutableStateOf<WebView?>(null) }
-        var hasRetriedBlank by remember { mutableStateOf(false) }
-        var loginRetryCount by remember { mutableIntStateOf(0) }
         val attendanceUrl = remember {
             if (intent.action == Intent.ACTION_VIEW) {
                 intent.dataString ?: ""
@@ -102,6 +106,24 @@ class WebViewActivity : ComponentActivity() {
             }
         }
         var initialLoginCanProceed by remember { mutableStateOf(false) }
+
+        fun restartAutomation() {
+            mainHandler.removeCallbacksAndMessages(null)
+            automationRunId += 1
+            currentUserIndex = 0
+            statusText = getString(R.string.loading_attendance_page)
+            isError = false
+            errorMessage = ""
+            isLoadingPage = true
+            isRefreshing = true
+            initialLoginCanProceed = false
+            webViewRef?.stopLoading()
+            webViewRef?.post {
+                if (attendanceUrl.isNotEmpty()) {
+                    webViewRef?.loadUrl(attendanceUrl)
+                }
+            }
+        }
 
         if (isLoadingUsers) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -119,15 +141,31 @@ class WebViewActivity : ComponentActivity() {
             return
         }
 
-        Column(modifier = Modifier
-            .fillMaxSize()
-            .safeDrawingPadding()
-        ) {
-            Box(modifier = Modifier.weight(1f)) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            bottomBar = {
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .safeDrawingPadding()
+                        .padding(12.dp)
+                )
+            }
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) {
                 AttendanceWebView(
                     url = attendanceUrl,
+                    isRefreshing = isRefreshing,
+                    onRefresh = ::restartAutomation,
                     onPageFinished = {
                         isLoadingPage = false
+                        isRefreshing = false
                         mainHandler.postDelayed({
                             initialLoginCanProceed = true
                         }, 2000)
@@ -135,7 +173,9 @@ class WebViewActivity : ComponentActivity() {
                     onProvideWebView = { webView ->
                         webView.addJavascriptInterface(object : Any() {
                             @JavascriptInterface
-                            fun onLoginSubmitted() {
+                            fun onLoginSubmitted(runId: Int) {
+                                if (runId != automationRunId) return
+
                                 val submittedUserIndex = currentUserIndex
                                 if (submittedUserIndex < activeUsers.size) {
                                     val currentUser = activeUsers[submittedUserIndex]
@@ -152,7 +192,9 @@ class WebViewActivity : ComponentActivity() {
                             }
 
                             @JavascriptInterface
-                            fun onLoginFailed(reason: String) {
+                            fun onLoginFailed(runId: Int, reason: String) {
+                                if (runId != automationRunId) return
+
                                 val failedUserIndex = currentUserIndex
                                 if (failedUserIndex < activeUsers.size) {
                                     val currentUser = activeUsers[failedUserIndex]
@@ -168,71 +210,20 @@ class WebViewActivity : ComponentActivity() {
                                     }
                                 }
                             }
-
-                            @JavascriptInterface
-                            fun onRetryLogin() {
-                                mainHandler.post {
-                                    loginRetryCount++
-                                    isLoadingPage = true
-                                    initialLoginCanProceed = false
-                                    webViewRef?.reload()
-                                }
-                            }
                         }, "Android")
                     },
                     onEvaluateLogin = { webView ->
                         if (currentUserIndex < activeUsers.size) {
                             val user = activeUsers[currentUserIndex]
                             initialLoginCanProceed = false
-                            val escUser = user.userId.replace("'", "\\'")
-                            val escPass = user.password.replace("'", "\\'")
-                            val js = """
-                                javascript:
-                                function fillAndSubmit(user, pass, retryCount, loginRetryCount) {
-                                  if (retryCount > 10) {
-                                    if (loginRetryCount < 2) {
-                                      Android.onRetryLogin();
-                                    } else {
-                                      Android.onLoginFailed('Login fields not found after retries');
-                                    }
-                                    return;
-                                  }
-                                  var userField = document.querySelector('input[type="text"], input[name*="user"], input[id*="user"], input[placeholder*="User"]');
-                                  var passField = document.querySelector('input[type="password"]');
-                                  var submitBtn = document.querySelector('input[type="submit"], button[type="submit"], input[value*="Sign"], button');
-
-                                  if (userField && passField) {
-                                    userField.value = '';
-                                    passField.value = '';
-                                    setTimeout(function() {
-                                      userField.value = user;
-                                      passField.value = pass;
-                                      if (submitBtn) {
-                                        submitBtn.click();
-                                        Android.onLoginSubmitted();
-                                      } else {
-                                        Android.onLoginFailed('Submit button not found');
-                                      }
-                                    }, 200);
-                                  } else {
-                                    setTimeout(function() { fillAndSubmit(user, pass, retryCount + 1, loginRetryCount); }, 100);
-                                  }
-                                }
-                                fillAndSubmit('$escUser', '$escPass', 0, $loginRetryCount);
-                            """.trimIndent()
-                            webView.evaluateJavascript(js, null)
+                            webView.evaluateJavascript(buildLoginAutomationScript(user.userId, user.password, automationRunId), null)
                         }
                     },
                     onError = { message ->
-                        if (message == "Page loaded but appears to be blank" && !hasRetriedBlank) {
-                            hasRetriedBlank = true
-                            isLoadingPage = true
-                            webViewRef?.reload()
-                        } else {
-                            isError = true
-                            errorMessage = message
-                            isLoadingPage = false
-                        }
+                        isRefreshing = false
+                        isError = true
+                        errorMessage = message
+                        isLoadingPage = false
                     },
                     onWebViewInstance = { webViewRef = it },
                     canTriggerLogin = initialLoginCanProceed
@@ -246,25 +237,12 @@ class WebViewActivity : ComponentActivity() {
                     Column(modifier = Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(text = errorMessage, style = MaterialTheme.typography.bodyMedium)
                         Spacer(modifier = Modifier.height(16.dp))
-                        Button(onClick = {
-                            isError = false
-                            hasRetriedBlank = false
-                            isLoadingPage = true
-                            webViewRef?.loadUrl(attendanceUrl)
-                        }) {
+                        Button(onClick = ::restartAutomation) {
                             Text("Retry")
                         }
                     }
                 }
             }
-
-            Text(
-                text = statusText,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp)
-            )
         }
     }
 
@@ -283,56 +261,84 @@ class WebViewActivity : ComponentActivity() {
 @Composable
 private fun AttendanceWebView(
     url: String,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
     onPageFinished: () -> Unit,
     onProvideWebView: (WebView) -> Unit,
     onEvaluateLogin: (WebView) -> Unit,
     onError: (String) -> Unit,
-    onWebViewInstance: (WebView) -> Unit,
+    onWebViewInstance: (WebView?) -> Unit,
     canTriggerLogin: Boolean
 ) {
-    AndroidView(factory = { context ->
-        WebView(context).apply {
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.cacheMode = WebSettings.LOAD_DEFAULT
-            webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    super.onPageFinished(view, url)
-                    view?.evaluateJavascript("(document.body?.innerHTML?.length || 0)") { result ->
-                        val length = result?.toIntOrNull() ?: 0
-                        if (length < 100) {
-                            onError("Page loaded but appears to be blank")
-                        } else {
-                            onPageFinished()
+    AndroidView(
+        factory = { context ->
+            val webView = WebView(context).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.cacheMode = WebSettings.LOAD_DEFAULT
+                webViewClient = object : WebViewClient() {
+                    override fun onPageCommitVisible(view: WebView?, url: String?) {
+                        super.onPageCommitVisible(view, url)
+                        view?.postVisualStateCallback(
+                            SystemClock.uptimeMillis(),
+                            object : WebView.VisualStateCallback() {
+                                override fun onComplete(requestId: Long) {
+                                    onPageFinished()
+                                }
+                            }
+                        )
+                    }
+
+                    override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                        super.onReceivedError(view, request, error)
+                        if (request?.isForMainFrame == true) {
+                            onError(error?.description?.toString() ?: "Unknown resource error")
+                        }
+                    }
+
+                    override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: WebResourceResponse?) {
+                        super.onReceivedHttpError(view, request, errorResponse)
+                        if (request?.isForMainFrame == true) {
+                            onError("HTTP ${errorResponse?.statusCode ?: 0}: ${errorResponse?.reasonPhrase ?: "Unknown HTTP error"}")
                         }
                     }
                 }
-
-                override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
-                    super.onReceivedError(view, request, error)
-                    if (request?.isForMainFrame == true) {
-                        onError(error?.description?.toString() ?: "Unknown resource error")
-                    }
-                }
-
-                override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: WebResourceResponse?) {
-                    super.onReceivedHttpError(view, request, errorResponse)
-                    if (request?.isForMainFrame == true) {
-                        onError("HTTP ${errorResponse?.statusCode ?: 0}: ${errorResponse?.reasonPhrase ?: "Unknown HTTP error"}")
+                onWebViewInstance(this)
+                onProvideWebView(this)
+                if (url.isNotEmpty()) {
+                    post {
+                        loadUrl(url)
                     }
                 }
             }
-            onWebViewInstance(this)
-            onProvideWebView(this)
-            if (url.isNotEmpty()) {
-                loadUrl(url)
+
+            SwipeRefreshLayout(context).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                setOnRefreshListener(onRefresh)
+                setOnChildScrollUpCallback { _, _ -> false }
+                addView(webView)
             }
+        },
+        update = { swipeRefreshLayout ->
+            swipeRefreshLayout.isRefreshing = isRefreshing
+            val webView = swipeRefreshLayout.getChildAt(0) as? WebView ?: return@AndroidView
+            if (url.isNotEmpty() && canTriggerLogin) {
+                onEvaluateLogin(webView)
+            }
+        },
+        onRelease = { swipeRefreshLayout ->
+            val webView = swipeRefreshLayout.getChildAt(0) as? WebView
+            swipeRefreshLayout.setOnRefreshListener(null)
+            swipeRefreshLayout.removeAllViews()
+            onWebViewInstance(null)
+            webView?.destroy()
         }
-    }, update = { webView ->
-        if (url.isNotEmpty() && canTriggerLogin) {
-            onEvaluateLogin(webView)
-        }
-    }, onRelease = { webView ->
-        webView.destroy()
-    })
+    )
 }
