@@ -8,12 +8,12 @@ plugins {
     id("kotlin-parcelize")
 }
 
-val versionCode = 1
-val versionName = "1.0"
+val appVersionCode = 1
+val appVersionName = "1.0"
 
 android {
     namespace = "io.github.kowx712.mmuautoqr"
-    compileSdk = 36
+    compileSdk = 37
 
     val keystoreProperties = Properties().apply {
         load(rootProject.file("keystore.properties").inputStream())
@@ -22,9 +22,9 @@ android {
     defaultConfig {
         applicationId = "io.github.kowx712.mmuautoqr"
         minSdk = 26
-        targetSdk = 36
-        versionCode = versionCode
-        versionName = versionName
+        targetSdk = 37
+        versionCode = appVersionCode
+        versionName = appVersionName
     }
 
     signingConfigs {
@@ -53,12 +53,10 @@ android {
     buildFeatures {
         compose = true
     }
-
-    compileSdkMinor = 1
 }
 
 base {
-    archivesName.set("Attendance_Pro_max_$versionName-$versionCode")
+    archivesName.set("Attendance_Pro_Max_$appVersionName-$appVersionCode")
 }
 
 dependencies {
