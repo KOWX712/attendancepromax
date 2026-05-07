@@ -50,6 +50,27 @@ import io.github.kowx712.mmuautoqr.models.User
 import io.github.kowx712.mmuautoqr.ui.theme.AutoqrTheme
 import io.github.kowx712.mmuautoqr.utils.UserManager
 
+private const val AUTOMATION_ASSET_FILE_NAME = "automation.js"
+private const val AUTOMATION_USER_ID_PLACEHOLDER = "__USER_ID__"
+private const val AUTOMATION_PASSWORD_PLACEHOLDER = "__PASSWORD__"
+private const val AUTOMATION_RUN_ID_PLACEHOLDER = "__RUN_ID__"
+
+internal fun renderAutomationScriptTemplate(
+    template: String,
+    userId: String,
+    password: String,
+    automationRunId: Int
+): String {
+    return template
+        .replace(AUTOMATION_USER_ID_PLACEHOLDER, escapeForSingleQuotedJsString(userId))
+        .replace(AUTOMATION_PASSWORD_PLACEHOLDER, escapeForSingleQuotedJsString(password))
+        .replace(AUTOMATION_RUN_ID_PLACEHOLDER, automationRunId.toString())
+}
+
+private fun escapeForSingleQuotedJsString(value: String): String {
+    return value.replace("\\", "\\\\").replace("'", "\\'")
+}
+
 class WebViewActivity : ComponentActivity() {
     private lateinit var mainHandler: Handler
 
@@ -216,7 +237,16 @@ class WebViewActivity : ComponentActivity() {
                         if (currentUserIndex < activeUsers.size) {
                             val user = activeUsers[currentUserIndex]
                             initialLoginCanProceed = false
-                            webView.evaluateJavascript(buildLoginAutomationScript(user.userId, user.password, automationRunId), null)
+                            val automationScript = assets.open(AUTOMATION_ASSET_FILE_NAME).bufferedReader().use { it.readText() }
+                            val renderedScript = renderAutomationScriptTemplate(
+                                template = automationScript,
+                                userId = user.userId,
+                                password = user.password,
+                                automationRunId = automationRunId
+                            )
+                            webView.evaluateJavascript(renderedScript) {
+                                webView.evaluateJavascript("automation.init();", null)
+                            }
                         }
                     },
                     onError = { message ->
