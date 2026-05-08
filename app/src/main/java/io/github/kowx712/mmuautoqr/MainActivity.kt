@@ -5,10 +5,13 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -24,6 +27,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
@@ -36,24 +42,36 @@ import io.github.kowx712.mmuautoqr.ui.navigation3.Navigator
 import io.github.kowx712.mmuautoqr.ui.navigation3.Route
 import io.github.kowx712.mmuautoqr.ui.navigation3.rememberNavigator
 import io.github.kowx712.mmuautoqr.ui.screens.MainScreen
+import io.github.kowx712.mmuautoqr.ui.screens.SettingsScreen
 import io.github.kowx712.mmuautoqr.ui.screens.UserScreen
 import io.github.kowx712.mmuautoqr.ui.theme.AutoqrTheme
+import io.github.kowx712.mmuautoqr.utils.AppSettings
 import io.github.kowx712.mmuautoqr.utils.UserManager
+import io.github.kowx712.mmuautoqr.utils.WebViewHtmlSnapshotStore
 import io.github.kowx712.mmuautoqr.viewmodel.HomeViewModel
 import io.github.kowx712.mmuautoqr.viewmodel.HomeViewModelFactory
+import io.github.kowx712.mmuautoqr.viewmodel.SettingsViewModel
+import io.github.kowx712.mmuautoqr.viewmodel.SettingsViewModelFactory
 import io.github.kowx712.mmuautoqr.viewmodel.UserOperationFeedback
 import io.github.kowx712.mmuautoqr.viewmodel.UserViewModel
 import io.github.kowx712.mmuautoqr.viewmodel.UserViewModelFactory
+import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+private const val SETTINGS_EXPORT_LOG_TAG = "SettingsExport"
 
 class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun onCreate(savedInstanceState: Bundle?) {
         val userManager = UserManager(this)
+        val appSettings = AppSettings(this)
 
         val homeViewModelFactory = HomeViewModelFactory(userManager)
         val userViewModelFactory = UserViewModelFactory(userManager)
+        val settingsViewModelFactory = SettingsViewModelFactory(appSettings)
 
         enableEdgeToEdge()
         window.isNavigationBarContrastEnforced = false
@@ -61,7 +79,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         lifecycleScope.launch {
-            if (userManager.getActiveUserCount() > 0) {
+            if (appSettings.isOpenQrScannerAutomaticallyEnabled() && userManager.getActiveUserCount() > 0) {
                 startActivity(Intent(this@MainActivity, QRScannerActivity::class.java))
             }
         }
@@ -139,6 +157,101 @@ class MainActivity : ComponentActivity() {
                                         }
                                     )
                                 }
+                                is Route.Settings -> NavEntry(key) {
+                                    val settingsViewModel: SettingsViewModel =
+                                        viewModel(factory = settingsViewModelFactory)
+                                    val isOpenQrScannerAutomaticallyEnabled by
+                                        settingsViewModel.isOpenQrScannerAutomaticallyEnabled
+                                    val htmlSnapshotStore = remember {
+                                        WebViewHtmlSnapshotStore(
+                                            snapshotDir = File(cacheDir, "webview-snapshots"),
+                                            exportDir = File(cacheDir, "webview-snapshot-exports")
+                                        )
+                                    }
+                                    val noRenderedHtmlLogsMessage =
+                                        stringResource(R.string.no_rendered_html_logs)
+                                    val exportRenderedHtmlLogsSucceededMessage =
+                                        stringResource(R.string.export_rendered_html_logs_succeeded)
+                                    val exportRenderedHtmlLogsFailedMessage =
+                                        stringResource(R.string.export_rendered_html_logs_failed)
+                                    var pendingExportZip by remember { mutableStateOf<File?>(null) }
+                                    val exportLauncher =
+                                        rememberLauncherForActivityResult(
+                                            contract = ActivityResultContracts.CreateDocument("application/zip")
+                                        ) { destinationUri ->
+                                            val tempZip = pendingExportZip
+                                            pendingExportZip = null
+
+                                            if (destinationUri == null || tempZip == null) {
+                                                tempZip?.let(htmlSnapshotStore::deleteTempZip)
+                                                return@rememberLauncherForActivityResult
+                                            }
+
+                                            lifecycleScope.launch {
+                                                val wasSuccessful = runCatching {
+                                                    withContext(Dispatchers.IO) {
+                                                        contentResolver.openOutputStream(destinationUri)?.use { outputStream ->
+                                                            htmlSnapshotStore.copyZipTo(outputStream, tempZip)
+                                                        } ?: error("Failed to open export destination")
+                                                    }
+                                                }.onFailure { error ->
+                                                    Log.w(SETTINGS_EXPORT_LOG_TAG, "Failed to export rendered HTML logs", error)
+                                                }.isSuccess
+
+                                                withContext(Dispatchers.IO) {
+                                                    htmlSnapshotStore.deleteTempZip(tempZip)
+                                                }
+                                                Toast.makeText(
+                                                    this@MainActivity,
+                                                    if (wasSuccessful) {
+                                                        exportRenderedHtmlLogsSucceededMessage
+                                                    } else {
+                                                        exportRenderedHtmlLogsFailedMessage
+                                                    },
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        }
+
+                                    SettingsScreen(
+                                        isOpenQrScannerAutomaticallyEnabled = isOpenQrScannerAutomaticallyEnabled,
+                                        onOpenQrScannerAutomaticallyChanged = { enabled ->
+                                            settingsViewModel.setOpenQrScannerAutomaticallyEnabled(enabled)
+                                        },
+                                        onExportRenderedHtmlLogs = {
+                                            lifecycleScope.launch {
+                                                val exportResult = withContext(Dispatchers.IO) {
+                                                    runCatching {
+                                                        htmlSnapshotStore.createExportZip()
+                                                    }
+                                                }
+                                                val exportZip = exportResult.getOrNull()
+
+                                                if (exportResult.isFailure) {
+                                                    Log.w(
+                                                        SETTINGS_EXPORT_LOG_TAG,
+                                                        "Failed to create rendered HTML log export zip",
+                                                        exportResult.exceptionOrNull()
+                                                    )
+                                                    Toast.makeText(
+                                                        this@MainActivity,
+                                                        exportRenderedHtmlLogsFailedMessage,
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                } else if (exportZip == null) {
+                                                    Toast.makeText(
+                                                        this@MainActivity,
+                                                        noRenderedHtmlLogsMessage,
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                } else {
+                                                    pendingExportZip = exportZip
+                                                    exportLauncher.launch(exportZip.name)
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
                             }
                         }
 
@@ -162,7 +275,8 @@ class MainActivity : ComponentActivity() {
 
 val navItems: List<Route> = listOf(
     Route.Home,
-    Route.Users
+    Route.Users,
+    Route.Settings,
 )
 
 @Composable

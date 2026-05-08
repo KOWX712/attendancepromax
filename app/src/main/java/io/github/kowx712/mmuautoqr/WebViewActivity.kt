@@ -5,7 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
+import android.util.Log
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceError
@@ -49,11 +49,16 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import io.github.kowx712.mmuautoqr.models.User
 import io.github.kowx712.mmuautoqr.ui.theme.AutoqrTheme
 import io.github.kowx712.mmuautoqr.utils.UserManager
+import io.github.kowx712.mmuautoqr.utils.WebViewHtmlSnapshotStore
+import io.github.kowx712.mmuautoqr.utils.decodeEvaluateJavascriptResult
+import java.io.File
 
 private const val AUTOMATION_ASSET_FILE_NAME = "automation.js"
 private const val AUTOMATION_USER_ID_PLACEHOLDER = "__USER_ID__"
 private const val AUTOMATION_PASSWORD_PLACEHOLDER = "__PASSWORD__"
 private const val AUTOMATION_RUN_ID_PLACEHOLDER = "__RUN_ID__"
+private const val HTML_CAPTURE_SCRIPT = "(function(){return document.documentElement.outerHTML;})()"
+private const val WEBVIEW_SNAPSHOT_LOG_TAG = "WebViewSnapshots"
 
 internal fun renderAutomationScriptTemplate(
     template: String,
@@ -102,6 +107,11 @@ class WebViewActivity : ComponentActivity() {
     @Composable
     private fun WebViewScreen() {
         val userManager = remember { UserManager(this@WebViewActivity) }
+        val htmlSnapshotStore = remember {
+            WebViewHtmlSnapshotStore(
+                snapshotDir = File(cacheDir, "webview-snapshots")
+            )
+        }
         var activeUsers by remember { mutableStateOf<List<User>>(emptyList()) }
         var isLoadingUsers by remember { mutableStateOf(true) }
 
@@ -119,6 +129,7 @@ class WebViewActivity : ComponentActivity() {
         var isRefreshing by remember { mutableStateOf(false) }
         var automationRunId by remember { mutableIntStateOf(0) }
         var webViewRef by remember { mutableStateOf<WebView?>(null) }
+        var hasStartedInitialLoad by remember { mutableStateOf(false) }
         val attendanceUrl = remember {
             if (intent.action == Intent.ACTION_VIEW) {
                 intent.dataString ?: ""
@@ -138,6 +149,7 @@ class WebViewActivity : ComponentActivity() {
             isLoadingPage = true
             isRefreshing = true
             initialLoginCanProceed = false
+            hasStartedInitialLoad = true
             webViewRef?.stopLoading()
             webViewRef?.post {
                 if (attendanceUrl.isNotEmpty()) {
@@ -162,6 +174,16 @@ class WebViewActivity : ComponentActivity() {
             return
         }
 
+        LaunchedEffect(webViewRef, attendanceUrl, hasStartedInitialLoad) {
+            val webView = webViewRef ?: return@LaunchedEffect
+            if (!hasStartedInitialLoad && attendanceUrl.isNotEmpty()) {
+                hasStartedInitialLoad = true
+                webView.post {
+                    webView.loadUrl(attendanceUrl)
+                }
+            }
+        }
+
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             bottomBar = {
@@ -184,11 +206,46 @@ class WebViewActivity : ComponentActivity() {
                     url = attendanceUrl,
                     isRefreshing = isRefreshing,
                     onRefresh = ::restartAutomation,
-                    onPageFinished = {
+                    onPageFinished = { webView, renderedUrl ->
+                        webView.evaluateJavascript(HTML_CAPTURE_SCRIPT) { serializedHtml ->
+                            val renderedHtml = decodeEvaluateJavascriptResult(serializedHtml)
+                            if (renderedHtml.isBlank()) {
+                                return@evaluateJavascript
+                            }
+
+                            Thread {
+                                runCatching {
+                                    htmlSnapshotStore.saveSnapshot(
+                                        url = renderedUrl ?: webView.url,
+                                        html = renderedHtml
+                                    )
+                                }.onFailure { error ->
+                                    Log.w(
+                                        WEBVIEW_SNAPSHOT_LOG_TAG,
+                                        "Failed to save HTML snapshot for ${renderedUrl ?: webView.url}",
+                                        error
+                                    )
+                                }
+                            }.start()
+                        }
                         isLoadingPage = false
                         isRefreshing = false
                         mainHandler.postDelayed({
                             initialLoginCanProceed = true
+                            if (currentUserIndex < activeUsers.size) {
+                                val user = activeUsers[currentUserIndex]
+                                initialLoginCanProceed = false
+                                val automationScript = assets.open(AUTOMATION_ASSET_FILE_NAME).bufferedReader().use { it.readText() }
+                                val renderedScript = renderAutomationScriptTemplate(
+                                    template = automationScript,
+                                    userId = user.userId,
+                                    password = user.password,
+                                    automationRunId = automationRunId
+                                )
+                                webView.evaluateJavascript(renderedScript) {
+                                    webView.evaluateJavascript("automation.init();", null)
+                                }
+                            }
                         }, 2000)
                     },
                     onProvideWebView = { webView ->
@@ -233,30 +290,13 @@ class WebViewActivity : ComponentActivity() {
                             }
                         }, "Android")
                     },
-                    onEvaluateLogin = { webView ->
-                        if (currentUserIndex < activeUsers.size) {
-                            val user = activeUsers[currentUserIndex]
-                            initialLoginCanProceed = false
-                            val automationScript = assets.open(AUTOMATION_ASSET_FILE_NAME).bufferedReader().use { it.readText() }
-                            val renderedScript = renderAutomationScriptTemplate(
-                                template = automationScript,
-                                userId = user.userId,
-                                password = user.password,
-                                automationRunId = automationRunId
-                            )
-                            webView.evaluateJavascript(renderedScript) {
-                                webView.evaluateJavascript("automation.init();", null)
-                            }
-                        }
-                    },
                     onError = { message ->
                         isRefreshing = false
                         isError = true
                         errorMessage = message
                         isLoadingPage = false
                     },
-                    onWebViewInstance = { webViewRef = it },
-                    canTriggerLogin = initialLoginCanProceed
+                    onWebViewInstance = { webViewRef = it }
                 )
 
                 if (isLoadingPage) {
@@ -293,15 +333,15 @@ private fun AttendanceWebView(
     url: String,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
-    onPageFinished: () -> Unit,
+    onPageFinished: (WebView, String?) -> Unit,
     onProvideWebView: (WebView) -> Unit,
-    onEvaluateLogin: (WebView) -> Unit,
     onError: (String) -> Unit,
     onWebViewInstance: (WebView?) -> Unit,
-    canTriggerLogin: Boolean
 ) {
     AndroidView(
         factory = { context ->
+            var currentPageReadyUrl: String? = null
+            var hasDispatchedPageReady = false
             val webView = WebView(context).apply {
                 layoutParams = ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -311,16 +351,37 @@ private fun AttendanceWebView(
                 settings.domStorageEnabled = true
                 settings.cacheMode = WebSettings.LOAD_DEFAULT
                 webViewClient = object : WebViewClient() {
+                    override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                        super.onPageStarted(view, url, favicon)
+                        currentPageReadyUrl = url ?: view?.url
+                        hasDispatchedPageReady = false
+                    }
+
                     override fun onPageCommitVisible(view: WebView?, url: String?) {
                         super.onPageCommitVisible(view, url)
                         view?.postVisualStateCallback(
-                            SystemClock.uptimeMillis(),
+                            System.nanoTime(),
                             object : WebView.VisualStateCallback() {
                                 override fun onComplete(requestId: Long) {
-                                    onPageFinished()
+                                    val currentWebView = view
+                                    val readyUrl = url ?: currentWebView.url
+                                    if (!hasDispatchedPageReady && (currentPageReadyUrl == null || readyUrl == currentPageReadyUrl)) {
+                                        hasDispatchedPageReady = true
+                                        onPageFinished(currentWebView, readyUrl)
+                                    }
                                 }
                             }
                         )
+                    }
+
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        super.onPageFinished(view, url)
+                        val currentWebView = view ?: return
+                        val readyUrl = url ?: currentWebView.url
+                        if (!hasDispatchedPageReady && (currentPageReadyUrl == null || readyUrl == currentPageReadyUrl)) {
+                            hasDispatchedPageReady = true
+                            onPageFinished(currentWebView, readyUrl)
+                        }
                     }
 
                     override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
@@ -339,11 +400,6 @@ private fun AttendanceWebView(
                 }
                 onWebViewInstance(this)
                 onProvideWebView(this)
-                if (url.isNotEmpty()) {
-                    post {
-                        loadUrl(url)
-                    }
-                }
             }
 
             SwipeRefreshLayout(context).apply {
@@ -358,10 +414,6 @@ private fun AttendanceWebView(
         },
         update = { swipeRefreshLayout ->
             swipeRefreshLayout.isRefreshing = isRefreshing
-            val webView = swipeRefreshLayout.getChildAt(0) as? WebView ?: return@AndroidView
-            if (url.isNotEmpty() && canTriggerLogin) {
-                onEvaluateLogin(webView)
-            }
         },
         onRelease = { swipeRefreshLayout ->
             val webView = swipeRefreshLayout.getChildAt(0) as? WebView
