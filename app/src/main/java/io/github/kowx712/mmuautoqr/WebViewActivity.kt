@@ -137,7 +137,6 @@ class WebViewActivity : ComponentActivity() {
                 intent.getStringExtra("url") ?: ""
             }
         }
-        var initialLoginCanProceed by remember { mutableStateOf(false) }
 
         fun restartAutomation() {
             mainHandler.removeCallbacksAndMessages(null)
@@ -148,7 +147,6 @@ class WebViewActivity : ComponentActivity() {
             errorMessage = ""
             isLoadingPage = true
             isRefreshing = true
-            initialLoginCanProceed = false
             hasStartedInitialLoad = true
             webViewRef?.stopLoading()
             webViewRef?.post {
@@ -203,7 +201,6 @@ class WebViewActivity : ComponentActivity() {
                     .padding(innerPadding)
             ) {
                 AttendanceWebView(
-                    url = attendanceUrl,
                     isRefreshing = isRefreshing,
                     onRefresh = ::restartAutomation,
                     onPageFinished = { webView, renderedUrl ->
@@ -231,10 +228,8 @@ class WebViewActivity : ComponentActivity() {
                         isLoadingPage = false
                         isRefreshing = false
                         mainHandler.postDelayed({
-                            initialLoginCanProceed = true
                             if (currentUserIndex < activeUsers.size) {
                                 val user = activeUsers[currentUserIndex]
-                                initialLoginCanProceed = false
                                 val automationScript = assets.open(AUTOMATION_ASSET_FILE_NAME).bufferedReader().use { it.readText() }
                                 val renderedScript = renderAutomationScriptTemplate(
                                     template = automationScript,
@@ -262,7 +257,6 @@ class WebViewActivity : ComponentActivity() {
                                         mainHandler.postDelayed({
                                             proceedToNextUser(activeUsers, submittedUserIndex) { nextIndex ->
                                                 currentUserIndex = nextIndex
-                                                initialLoginCanProceed = true
                                             }
                                         }, 3000)
                                     }, 100)
@@ -275,14 +269,11 @@ class WebViewActivity : ComponentActivity() {
 
                                 val failedUserIndex = currentUserIndex
                                 if (failedUserIndex < activeUsers.size) {
-                                    val currentUser = activeUsers[failedUserIndex]
                                     mainHandler.post {
                                         Toast.makeText(this@WebViewActivity, getString(R.string.login_failed, reason), Toast.LENGTH_SHORT).show()
-                                        statusText = getString(R.string.login_failed, currentUser.name)
                                         mainHandler.postDelayed({
                                             proceedToNextUser(activeUsers, failedUserIndex) { nextIndex ->
                                                 currentUserIndex = nextIndex
-                                                initialLoginCanProceed = true
                                             }
                                         }, 1000)
                                     }
@@ -330,7 +321,6 @@ class WebViewActivity : ComponentActivity() {
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun AttendanceWebView(
-    url: String,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     onPageFinished: (WebView, String?) -> Unit,

@@ -126,7 +126,7 @@ class Navigator<T : NavKey>(
             navigator.backStack.toList()
         }, restore = { savedList ->
             @Suppress("UNCHECKED_CAST")
-            val initialKey = savedList.firstOrNull() ?: Route.Home as T
+            val initialKey = savedList.firstOrNull() ?: Route.Main as T
             val navigator = Navigator(initialKey)
             navigator.backStack.clear()
             navigator.backStack.addAll(savedList)

@@ -72,18 +72,18 @@ class QRScannerActivity : ComponentActivity() {
     private var cameraProviderFuture: ListenableFuture<ProcessCameraProvider>? = null
 
     private val requestCameraPermission =
-            registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-                if (isGranted) startCamera()
-                else {
-                    Toast.makeText(
-                                this,
-                                getString(R.string.camera_permission_required),
-                                Toast.LENGTH_LONG
-                        )
-                            .show()
-                    finish()
-                }
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (isGranted) startCamera()
+            else {
+                Toast.makeText(
+                    this,
+                    getString(R.string.camera_permission_required),
+                    Toast.LENGTH_LONG
+                )
+                    .show()
+                finish()
             }
+        }
 
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -96,14 +96,14 @@ class QRScannerActivity : ComponentActivity() {
         cameraExecutor = Executors.newSingleThreadExecutor()
 
         val options =
-                BarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
+            BarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
         barcodeScanner = BarcodeScanning.getClient(options)
 
         setContent {
             AutoqrTheme {
                 Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        color = MaterialTheme.colorScheme.background
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
                 ) { ScannerScreen(onReady = { checkPermissionAndStart() }) }
             }
         }
@@ -111,32 +111,32 @@ class QRScannerActivity : ComponentActivity() {
 
     private fun checkPermissionAndStart() {
         val granted =
-                ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
-                        PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
+                    PackageManager.PERMISSION_GRANTED
         if (granted) startCamera() else requestCameraPermission.launch(Manifest.permission.CAMERA)
     }
 
     private fun startCamera() {
         cameraProviderFuture = ProcessCameraProvider.getInstance(this)
         cameraProviderFuture?.addListener(
-                {
-                    val provider = cameraProviderFuture?.get() ?: return@addListener
-                    bindPreviewAndAnalysis(provider)
-                },
-                ContextCompat.getMainExecutor(this)
+            {
+                val provider = cameraProviderFuture?.get() ?: return@addListener
+                bindPreviewAndAnalysis(provider)
+            },
+            ContextCompat.getMainExecutor(this)
         )
     }
 
     private fun bindPreviewAndAnalysis(cameraProvider: ProcessCameraProvider) {
         val previewView = PreviewView(this)
         val previewUseCase =
-                CameraPreview.Builder().build().apply {
-                    surfaceProvider = previewView.surfaceProvider
-                }
+            CameraPreview.Builder().build().apply {
+                surfaceProvider = previewView.surfaceProvider
+            }
         val analysisUseCase =
-                ImageAnalysis.Builder()
-                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                        .build()
+            ImageAnalysis.Builder()
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build()
 
         var isScanning = true
 
@@ -171,7 +171,8 @@ class QRScannerActivity : ComponentActivity() {
                 previewUseCase,
                 analysisUseCase
             )
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
 
         runOnUiThread {
             setContent {
@@ -237,7 +238,8 @@ class QRScannerActivity : ComponentActivity() {
         try {
             toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 200)
             window.decorView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
     }
 
     override fun onDestroy() {
@@ -266,7 +268,8 @@ private fun ScannerScreen(
         modifier = Modifier
             .fillMaxSize()
             .pointerInput(Unit) {
-                detectTransformGestures { _, _, zoom, _ -> if (zoom != 1f) onScale(zoom)
+                detectTransformGestures { _, _, zoom, _ ->
+                    if (zoom != 1f) onScale(zoom)
                 }
             }
     ) {

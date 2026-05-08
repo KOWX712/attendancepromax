@@ -9,7 +9,27 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 
-class UserManager(context: Context) {
+interface UserDataStore {
+    suspend fun getUsers(): List<User>
+
+    suspend fun getUserCount(): Int
+
+    suspend fun getActiveUserCount(): Int
+
+    suspend fun addUser(name: String, userId: String, password: String): Boolean
+
+    suspend fun updateUser(userIdToUpdate: String, newName: String, newPassword: String): Boolean
+
+    suspend fun deleteUser(userIdToDelete: String): Boolean
+
+    suspend fun toggleUserStatus(userIdToToggle: String): Boolean
+
+    suspend fun clearAllUsers()
+
+    fun refreshCache()
+}
+
+class UserManager(context: Context) : UserDataStore {
     private val sharedPreferences: SharedPreferences =
         context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
 
@@ -39,7 +59,7 @@ class UserManager(context: Context) {
         }
     }
 
-    suspend fun getUsers(): List<User> = withContext(Dispatchers.IO) {
+    override suspend fun getUsers(): List<User> = withContext(Dispatchers.IO) {
         _cachedUsers?.toList()?.let { return@withContext it }
 
         val encryptedJson = sharedPreferences.getString(USERS_LIST_PREFS_KEY, null)
@@ -59,9 +79,9 @@ class UserManager(context: Context) {
         loadedUsers.toList()
     }
 
-    suspend fun getUserCount(): Int = getUsers().size
+    override suspend fun getUserCount(): Int = getUsers().size
 
-    suspend fun getActiveUserCount(): Int = getUsers().count { it.isActive }
+    override suspend fun getActiveUserCount(): Int = getUsers().count { it.isActive }
 
     private suspend fun saveUsersToPrefs(usersToSave: List<User>) = withContext(Dispatchers.IO) {
         val json = Json.encodeToString(usersToSave)
@@ -69,7 +89,7 @@ class UserManager(context: Context) {
         sharedPreferences.edit { putString(USERS_LIST_PREFS_KEY, encryptedJson) }
     }
 
-    suspend fun addUser(name: String, userId: String, password: String): Boolean {
+    override suspend fun addUser(name: String, userId: String, password: String): Boolean {
         val currentUsers = _cachedUsers ?: getUsers().toMutableList()
         if (currentUsers.any { it.userId == userId }) {
             return false
@@ -81,7 +101,7 @@ class UserManager(context: Context) {
         return true
     }
 
-    suspend fun updateUser(userIdToUpdate: String, newName: String, newPassword: String): Boolean {
+    override suspend fun updateUser(userIdToUpdate: String, newName: String, newPassword: String): Boolean {
         val currentUsers = _cachedUsers ?: getUsers().toMutableList()
         val userIndex = currentUsers.indexOfFirst { it.userId == userIdToUpdate }
         if (userIndex != -1) {
@@ -94,7 +114,7 @@ class UserManager(context: Context) {
         return false
     }
 
-    suspend fun deleteUser(userIdToDelete: String): Boolean {
+    override suspend fun deleteUser(userIdToDelete: String): Boolean {
         val currentUsers = _cachedUsers ?: getUsers().toMutableList()
         val removed = currentUsers.removeAll { it.userId == userIdToDelete }
         if (removed) {
@@ -104,7 +124,7 @@ class UserManager(context: Context) {
         return removed
     }
 
-    suspend fun toggleUserStatus(userIdToToggle: String): Boolean {
+    override suspend fun toggleUserStatus(userIdToToggle: String): Boolean {
         val currentUsers = _cachedUsers ?: getUsers().toMutableList()
         val userIndex = currentUsers.indexOfFirst { it.userId == userIdToToggle }
         if (userIndex != -1) {
@@ -117,12 +137,12 @@ class UserManager(context: Context) {
         return false
     }
 
-    suspend fun clearAllUsers() {
+    override suspend fun clearAllUsers() {
         _cachedUsers = mutableListOf()
         saveUsersToPrefs(emptyList())
     }
 
-    fun refreshCache() {
+    override fun refreshCache() {
         _cachedUsers = null
     }
 }

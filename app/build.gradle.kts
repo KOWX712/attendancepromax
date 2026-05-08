@@ -53,6 +53,16 @@ android {
     buildFeatures {
         compose = true
     }
+
+    packaging {
+        dex {
+            useLegacyPackaging = true
+        }
+        jniLibs {
+            useLegacyPackaging = true
+            excludes += "lib/*/libandroidx.graphics.path.so"
+        }
+    }
 }
 
 base {

@@ -14,13 +14,15 @@ class MainTileService : TileService() {
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
-        TileServiceCompat.startActivityAndCollapse(this, PendingIntentActivityWrapper(
-            this,
-            0,
-            intent,
-            PendingIntent.FLAG_ONE_SHOT,
-            true
-        ))
+        TileServiceCompat.startActivityAndCollapse(
+            this, PendingIntentActivityWrapper(
+                this,
+                0,
+                intent,
+                PendingIntent.FLAG_ONE_SHOT,
+                true
+            )
+        )
     }
 
     override fun onStartListening() {

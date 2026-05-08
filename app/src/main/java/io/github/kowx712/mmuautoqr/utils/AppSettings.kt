@@ -43,10 +43,10 @@ class AppSettings(
         )
     )
 
-    fun isOpenQrScannerAutomaticallyEnabled(): Boolean =
+    fun isOpenQrScannerEnabled(): Boolean =
         booleanStore.getBoolean(AUTO_OPEN_QR_SCANNER_KEY, true)
 
-    fun setOpenQrScannerAutomaticallyEnabled(enabled: Boolean) {
+    fun setOpenQrScannerEnabled(enabled: Boolean) {
         booleanStore.putBoolean(AUTO_OPEN_QR_SCANNER_KEY, enabled)
     }
 }

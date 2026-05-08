@@ -2,19 +2,24 @@ package io.github.kowx712.mmuautoqr.ui.screens
 
 import android.annotation.SuppressLint
 import android.view.HapticFeedbackConstants
+import android.widget.Toast
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.add
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -22,9 +27,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -36,7 +39,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,6 +55,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentType
@@ -60,11 +63,19 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.kowx712.mmuautoqr.R
 import io.github.kowx712.mmuautoqr.models.User
 import io.github.kowx712.mmuautoqr.ui.theme.AutoqrTheme
+import io.github.kowx712.mmuautoqr.utils.UserManager
+import io.github.kowx712.mmuautoqr.viewmodel.UserOperationFeedback
+import io.github.kowx712.mmuautoqr.viewmodel.UserViewModel
+import io.github.kowx712.mmuautoqr.viewmodel.UserViewModelFactory
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 @Preview(showBackground = true)
@@ -77,12 +88,13 @@ fun UserScreenPreview() {
         )
         val usersState = remember { mutableStateOf(usersData) }
 
-        UserScreen(
+        UserScreenContent(
             users = usersState.value,
             onAddUser = { _, _, _ -> delay(1); true },
             onUpdateUser = { _, _, _ -> delay(1); true },
             onDeleteUser = { _ -> delay(1); true },
             onToggleUserStatus = {},
+            bottomInnerPadding = 0.dp,
         )
     }
 }
@@ -91,23 +103,59 @@ fun UserScreenPreview() {
 @SuppressLint("MutableCollectionMutableState")
 @Composable
 fun UserScreen(
+    bottomInnerPadding: Dp,
+) {
+    val context = LocalContext.current
+    val resource = LocalResources.current
+    val appContext = context.applicationContext
+    val owner = context as? ViewModelStoreOwner ?: error("UserScreen requires a ViewModelStoreOwner context")
+    val viewModel: UserViewModel = viewModel(
+        viewModelStoreOwner = owner,
+        key = "user_view_model",
+        factory = remember(appContext) {
+            UserViewModelFactory(UserManager(appContext))
+        }
+    )
+    val users by viewModel.usersList
+
+    LaunchedEffect(Unit) {
+        viewModel.operationFeedback.collectLatest { feedback ->
+            val message = when (feedback) {
+                is UserOperationFeedback.Success -> resource.getString(feedback.messageResId)
+                is UserOperationFeedback.Error -> resource.getString(feedback.messageResId)
+            }
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    UserScreenContent(
+        users = users,
+        onAddUser = viewModel::addUser,
+        onUpdateUser = viewModel::updateUser,
+        onDeleteUser = viewModel::deleteUser,
+        onToggleUserStatus = viewModel::toggleUserStatus,
+        bottomInnerPadding = bottomInnerPadding,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@SuppressLint("MutableCollectionMutableState")
+@Composable
+private fun UserScreenContent(
     users: List<User>,
     onAddUser: suspend (String, String, String) -> Boolean,
     onUpdateUser: suspend (User, String, String) -> Boolean,
     onDeleteUser: suspend (User) -> Boolean,
     onToggleUserStatus: (User) -> Unit,
+    bottomInnerPadding: Dp,
 ) {
     val view = LocalView.current
     val scope = rememberCoroutineScope()
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     var showAddDialog by remember { mutableStateOf(false) }
     var editUser by remember { mutableStateOf<User?>(null) }
     var userToDelete by remember { mutableStateOf<User?>(null) }
-
-    val scrollBehavior =
-        TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
-            rememberTopAppBarState(),
-            canScroll = { true })
 
     Scaffold(
         modifier = Modifier
@@ -121,12 +169,13 @@ fun UserScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
+                modifier = Modifier.padding(bottom = bottomInnerPadding),
                 onClick = { showAddDialog = true },
             ) {
-                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_user))
+                Icon(Icons.Filled.Add, stringResource(R.string.add_user))
             }
         },
-        contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
+        contentWindowInsets = WindowInsets.systemBars.add(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal),
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
@@ -145,6 +194,9 @@ fun UserScreen(
                             view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                         }
                     )
+                }
+                item {
+                    Spacer(Modifier.height(bottomInnerPadding))
                 }
             }
         }
@@ -183,7 +235,7 @@ fun UserScreen(
             title = { Text(stringResource(R.string.delete_user_title)) },
             text = { Text(stringResource(R.string.delete_user_message, user.name)) },
             confirmButton = {
-                FilledTonalButton(onClick = {
+                TextButton(onClick = {
                     scope.launch {
                         if (onDeleteUser(user)) {
                             userToDelete = null
@@ -214,7 +266,9 @@ private fun UserRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Column(modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp)) {
+        Column(modifier = Modifier
+            .weight(1f, fill = false)
+            .padding(end = 8.dp)) {
             Text(text = user.name, style = MaterialTheme.typography.titleMedium)
             Text(text = user.userId, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -252,13 +306,18 @@ private fun ShowUserDialog(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text(stringResource(R.string.full_name)) },
-                    modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.PersonFullName }.focusRequester(nameFocusRequester),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentType = ContentType.PersonFullName }
+                        .focusRequester(nameFocusRequester),
                 )
                 OutlinedTextField(
                     value = userIdTextState,
                     onValueChange = { userIdTextState = it },
                     label = { Text(stringResource(R.string.user_id)) },
-                    modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Username },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentType = ContentType.Username },
                     enabled = initial == null
                 )
                 OutlinedTextField(
@@ -266,36 +325,50 @@ private fun ShowUserDialog(
                     onValueChange = { password = it },
                     label = { Text(stringResource(R.string.password)) },
                     visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Password },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentType = ContentType.Password },
                     trailingIcon = {
                         val image = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
                         val description = if (passwordVisible) stringResource(R.string.hide_password) else stringResource(R.string.show_password)
-                        IconButton(modifier = Modifier.pointerInput(Unit) {}, onClick = { passwordVisible = !passwordVisible }) { Icon(imageVector  = image, description) }
+                        IconButton(
+                            modifier = Modifier.pointerInput(Unit) {},
+                            onClick = { passwordVisible = !passwordVisible }) { Icon(imageVector = image, description) }
                     }
                 )
             }
         },
         confirmButton = {
-            Button(onClick = {
+            TextButton(onClick = {
                 autofillManager?.commit()
-                if (name.isBlank()) { return@Button }
+                if (name.isBlank()) {
+                    return@TextButton
+                }
 
                 dialogScope.launch {
                     val effectiveUserId = initial?.userId ?: userIdTextState.trim()
                     if (initial == null) {
-                        if (userIdTextState.isBlank() || userIdTextState.length < 3) { return@launch }
-                        if (password.isBlank() || password.length < 4) { return@launch }
+                        if (userIdTextState.isBlank() || userIdTextState.length < 3) {
+                            return@launch
+                        }
+                        if (password.isBlank() || password.length < 4) {
+                            return@launch
+                        }
                     } else {
-                        if (password.isNotBlank() && password.length < 4) { return@launch }
+                        if (password.isNotBlank() && password.length < 4) {
+                            return@launch
+                        }
                     }
                     onConfirmAction(name.trim(), effectiveUserId, password.trim())
                 }
             }) { Text(if (initial == null) stringResource(R.string.add) else stringResource(R.string.update)) }
         },
-        dismissButton = { TextButton(onClick = {
-            autofillManager?.cancel()
-            onDismiss()
-        }) { Text(stringResource(R.string.cancel)) } }
+        dismissButton = {
+            TextButton(onClick = {
+                autofillManager?.cancel()
+                onDismiss()
+            }) { Text(stringResource(R.string.cancel)) }
+        }
     )
     LaunchedEffect(Unit) {
         delay(100)
