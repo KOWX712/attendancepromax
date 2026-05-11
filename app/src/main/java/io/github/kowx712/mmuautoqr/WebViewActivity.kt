@@ -59,6 +59,8 @@ private const val AUTOMATION_PASSWORD_PLACEHOLDER = "__PASSWORD__"
 private const val AUTOMATION_RUN_ID_PLACEHOLDER = "__RUN_ID__"
 private const val HTML_CAPTURE_SCRIPT = "(function(){return document.documentElement.outerHTML;})()"
 private const val WEBVIEW_SNAPSHOT_LOG_TAG = "WebViewSnapshots"
+private const val INTERMEDIATE_LOGIN_QUERY_MARKER = "cmd=login"
+private const val INTERMEDIATE_LOGIN_ERROR_MARKER = "errorCode=105"
 
 internal fun renderAutomationScriptTemplate(
     template: String,
@@ -74,6 +76,34 @@ internal fun renderAutomationScriptTemplate(
 
 private fun escapeForSingleQuotedJsString(value: String): String {
     return value.replace("\\", "\\\\").replace("'", "\\'")
+}
+
+internal fun isIntermediateAttendanceLoginUrl(requestedUrl: String, renderedUrl: String?): Boolean {
+    if (requestedUrl.isBlank()) {
+        return false
+    }
+
+    val normalizedUrl = renderedUrl.orEmpty()
+    val hasLoginRedirectMarkers = normalizedUrl.contains(INTERMEDIATE_LOGIN_QUERY_MARKER, ignoreCase = true) &&
+        normalizedUrl.contains(INTERMEDIATE_LOGIN_ERROR_MARKER, ignoreCase = true)
+
+    if (!hasLoginRedirectMarkers) {
+        return false
+    }
+
+    return normalizedUrl.startsWith(requestedUrl, ignoreCase = true)
+}
+
+internal fun shouldRetryAttendancePageLoad(
+    requestedUrl: String,
+    renderedUrl: String?,
+    hasRetriedIntermediatePage: Boolean
+): Boolean {
+    if (hasRetriedIntermediatePage) {
+        return false
+    }
+
+    return isIntermediateAttendanceLoginUrl(requestedUrl, renderedUrl)
 }
 
 class WebViewActivity : ComponentActivity() {
@@ -130,6 +160,7 @@ class WebViewActivity : ComponentActivity() {
         var automationRunId by remember { mutableIntStateOf(0) }
         var webViewRef by remember { mutableStateOf<WebView?>(null) }
         var hasStartedInitialLoad by remember { mutableStateOf(false) }
+        var hasRetriedIntermediatePage by remember { mutableStateOf(false) }
         val attendanceUrl = remember {
             if (intent.action == Intent.ACTION_VIEW) {
                 intent.dataString ?: ""
@@ -148,6 +179,7 @@ class WebViewActivity : ComponentActivity() {
             isLoadingPage = true
             isRefreshing = true
             hasStartedInitialLoad = true
+            hasRetriedIntermediatePage = false
             webViewRef?.stopLoading()
             webViewRef?.post {
                 if (attendanceUrl.isNotEmpty()) {
@@ -207,6 +239,23 @@ class WebViewActivity : ComponentActivity() {
                         webView.evaluateJavascript(HTML_CAPTURE_SCRIPT) { serializedHtml ->
                             val renderedHtml = decodeEvaluateJavascriptResult(serializedHtml)
                             if (renderedHtml.isBlank()) {
+                                return@evaluateJavascript
+                            }
+
+                            if (shouldRetryAttendancePageLoad(
+                                    requestedUrl = attendanceUrl,
+                                    renderedUrl = renderedUrl ?: webView.url,
+                                    hasRetriedIntermediatePage = hasRetriedIntermediatePage
+                                )
+                            ) {
+                                hasRetriedIntermediatePage = true
+                                statusText = getString(R.string.retrying_attendance_page)
+                                isLoadingPage = true
+                                isRefreshing = true
+                                webView.stopLoading()
+                                webView.post {
+                                    webView.loadUrl(attendanceUrl)
+                                }
                                 return@evaluateJavascript
                             }
 

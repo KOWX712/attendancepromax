@@ -70,6 +70,7 @@
     <string name="processing_attendance">Processing attendance…</string>
     <string name="automated_login_progress">Automated Login In Progress</string>
     <string name="loading_attendance_page">Loading attendance page…</string>
+    <string name="retrying_attendance_page">Retrying attendance page…</string>
     <string name="signing_in_user">Signing in user: %1$s (%2$d/%3$d)</string>
     <string name="login_submitted">Login submitted for %1$s. Processing…</string>
     <string name="login_failed">Login failed for: %1$s</string>
