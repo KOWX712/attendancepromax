@@ -61,6 +61,9 @@ private const val HTML_CAPTURE_SCRIPT = "(function(){return document.documentEle
 private const val WEBVIEW_SNAPSHOT_LOG_TAG = "WebViewSnapshots"
 private const val INTERMEDIATE_LOGIN_QUERY_MARKER = "cmd=login"
 private const val INTERMEDIATE_LOGIN_ERROR_MARKER = "errorCode=105"
+private const val EXPIRED_QR_MESSAGE_MARKER = "Please signin from proper QR Code URL"
+private const val ATTENDANCE_LOGIN_USER_ID_FIELD = "N_QRCODE_DRV_USERID"
+private const val ATTENDANCE_LOGIN_PASSWORD_FIELD = "N_QRCODE_DRV_PASSWORD"
 
 internal fun renderAutomationScriptTemplate(
     template: String,
@@ -94,16 +97,37 @@ internal fun isIntermediateAttendanceLoginUrl(requestedUrl: String, renderedUrl:
     return normalizedUrl.startsWith(requestedUrl, ignoreCase = true)
 }
 
-internal fun shouldRetryAttendancePageLoad(
-    requestedUrl: String,
-    renderedUrl: String?,
-    hasRetriedIntermediatePage: Boolean
-): Boolean {
-    if (hasRetriedIntermediatePage) {
+internal fun isExpiredAttendancePage(renderedHtml: String): Boolean {
+    if (renderedHtml.isBlank()) {
         return false
     }
 
-    return isIntermediateAttendanceLoginUrl(requestedUrl, renderedUrl)
+    return renderedHtml.contains(EXPIRED_QR_MESSAGE_MARKER, ignoreCase = true)
+}
+
+internal fun hasAttendanceLoginForm(renderedHtml: String): Boolean {
+    if (renderedHtml.isBlank()) {
+        return false
+    }
+
+    return renderedHtml.contains(ATTENDANCE_LOGIN_USER_ID_FIELD) &&
+        renderedHtml.contains(ATTENDANCE_LOGIN_PASSWORD_FIELD)
+}
+
+internal fun shouldReopenQrScannerForAttendancePage(
+    requestedUrl: String,
+    renderedUrl: String?,
+    renderedHtml: String
+): Boolean {
+    if (requestedUrl.isBlank() || renderedHtml.isBlank()) {
+        return false
+    }
+
+    if (isExpiredAttendancePage(renderedHtml)) {
+        return true
+    }
+
+    return isIntermediateAttendanceLoginUrl(requestedUrl, renderedUrl) && !hasAttendanceLoginForm(renderedHtml)
 }
 
 class WebViewActivity : ComponentActivity() {
@@ -160,7 +184,6 @@ class WebViewActivity : ComponentActivity() {
         var automationRunId by remember { mutableIntStateOf(0) }
         var webViewRef by remember { mutableStateOf<WebView?>(null) }
         var hasStartedInitialLoad by remember { mutableStateOf(false) }
-        var hasRetriedIntermediatePage by remember { mutableStateOf(false) }
         val attendanceUrl = remember {
             if (intent.action == Intent.ACTION_VIEW) {
                 intent.dataString ?: ""
@@ -179,13 +202,19 @@ class WebViewActivity : ComponentActivity() {
             isLoadingPage = true
             isRefreshing = true
             hasStartedInitialLoad = true
-            hasRetriedIntermediatePage = false
             webViewRef?.stopLoading()
             webViewRef?.post {
                 if (attendanceUrl.isNotEmpty()) {
                     webViewRef?.loadUrl(attendanceUrl)
                 }
             }
+        }
+
+        fun reopenQrScanner() {
+            mainHandler.removeCallbacksAndMessages(null)
+            webViewRef?.stopLoading()
+            startActivity(Intent(this@WebViewActivity, QRScannerActivity::class.java))
+            finish()
         }
 
         if (isLoadingUsers) {
@@ -242,20 +271,16 @@ class WebViewActivity : ComponentActivity() {
                                 return@evaluateJavascript
                             }
 
-                            if (shouldRetryAttendancePageLoad(
+                            if (shouldReopenQrScannerForAttendancePage(
                                     requestedUrl = attendanceUrl,
                                     renderedUrl = renderedUrl ?: webView.url,
-                                    hasRetriedIntermediatePage = hasRetriedIntermediatePage
+                                    renderedHtml = renderedHtml
                                 )
                             ) {
-                                hasRetriedIntermediatePage = true
-                                statusText = getString(R.string.retrying_attendance_page)
-                                isLoadingPage = true
-                                isRefreshing = true
-                                webView.stopLoading()
-                                webView.post {
-                                    webView.loadUrl(attendanceUrl)
-                                }
+                                statusText = getString(R.string.loading_attendance_page)
+                                isLoadingPage = false
+                                isRefreshing = false
+                                reopenQrScanner()
                                 return@evaluateJavascript
                             }
 
