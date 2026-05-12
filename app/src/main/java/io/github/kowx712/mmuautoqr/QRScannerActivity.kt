@@ -3,6 +3,7 @@ package io.github.kowx712.mmuautoqr
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Rect
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Build
@@ -20,6 +21,9 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
@@ -60,9 +64,10 @@ import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import io.github.kowx712.mmuautoqr.ui.theme.AutoqrTheme
+import io.github.kowx712.mmuautoqr.utils.QRScannerLogic
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import androidx.camera.core.Preview as CameraPreview
+import kotlin.math.roundToInt
 
 class QRScannerActivity : ComponentActivity() {
     private var toneGenerator: ToneGenerator? = null
@@ -70,6 +75,16 @@ class QRScannerActivity : ComponentActivity() {
     private var cameraExecutor: ExecutorService? = null
     private var barcodeScanner: BarcodeScanner? = null
     private var cameraProviderFuture: ListenableFuture<ProcessCameraProvider>? = null
+
+    private data class ScannedBarcode(
+        val rawValue: String?,
+        val boundingBox: Rect?
+    )
+
+    companion object {
+        private const val SCANNING_FRAME_SIZE_DP = 250
+        private val ANALYSIS_TARGET_SIZE = android.util.Size(1280, 720)
+    }
 
     private val requestCameraPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -130,33 +145,68 @@ class QRScannerActivity : ComponentActivity() {
     private fun bindPreviewAndAnalysis(cameraProvider: ProcessCameraProvider) {
         val previewView = PreviewView(this)
         val previewUseCase =
-            CameraPreview.Builder().build().apply {
+            androidx.camera.core.Preview.Builder().build().apply {
                 surfaceProvider = previewView.surfaceProvider
             }
+        val analysisResolutionSelector =
+            ResolutionSelector.Builder()
+                .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
+                .setResolutionStrategy(
+                    ResolutionStrategy(
+                        ANALYSIS_TARGET_SIZE,
+                        ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+                    )
+                )
+                .build()
         val analysisUseCase =
             ImageAnalysis.Builder()
+                .setResolutionSelector(analysisResolutionSelector)
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
 
         var isScanning = true
+        var invalidScanState: QRScannerLogic.InvalidScanState? = null
+        var lastAutoZoomAtMillis = 0L
+        val frameSizePx = (SCANNING_FRAME_SIZE_DP * resources.displayMetrics.density).roundToInt()
 
         analysisUseCase.setAnalyzer(cameraExecutor!!) { imageProxy ->
-            processImageProxy(imageProxy) { result ->
-                if (isScanning && !result.isNullOrEmpty()) {
-                    isScanning = false
-                    val scannedUrl = result.trim()
-                    runOnUiThread {
-                        if (isValidUrl(scannedUrl)) {
-                            playSuccessSound()
-                            Toast.makeText(this, getString(R.string.qr_scanned_success), Toast.LENGTH_SHORT).show()
-                            val intent = Intent(this, WebViewActivity::class.java)
-                            intent.putExtra("url", scannedUrl)
-                            startActivity(intent)
-                            finish()
-                        } else {
+            val analysisRect = computeAnalysisCropRect(imageProxy, previewView, frameSizePx)
+            processImageProxy(imageProxy, analysisRect) { barcode ->
+                maybeAutoZoom(
+                    barcode = barcode,
+                    analysisRect = analysisRect,
+                    lastAutoZoomAtMillis = lastAutoZoomAtMillis
+                )?.let { timestamp ->
+                    lastAutoZoomAtMillis = timestamp
+                }
+
+                val scannedUrl = barcode?.rawValue?.trim()
+                if (scannedUrl.isNullOrEmpty()) return@processImageProxy
+                if (!isScanning) return@processImageProxy
+
+                isScanning = false
+                runOnUiThread {
+                    if (isValidUrl(scannedUrl)) {
+                        playSuccessSound()
+                        Toast.makeText(this, getString(R.string.qr_scanned_success), Toast.LENGTH_SHORT).show()
+                        val intent = Intent(this, WebViewActivity::class.java)
+                        intent.putExtra("url", scannedUrl)
+                        startActivity(intent)
+                        finish()
+                    } else {
+                        val now = System.currentTimeMillis()
+                        val shouldThrottle =
+                            QRScannerLogic.shouldThrottleInvalidScan(
+                                rawValue = scannedUrl,
+                                previousState = invalidScanState,
+                                nowMillis = now
+                            )
+                        invalidScanState = QRScannerLogic.InvalidScanState(scannedUrl, now)
+
+                        if (!shouldThrottle) {
                             Toast.makeText(this, getString(R.string.invalid_qr_code), Toast.LENGTH_LONG).show()
-                            isScanning = true
                         }
+                        isScanning = true
                     }
                 }
             }
@@ -171,8 +221,7 @@ class QRScannerActivity : ComponentActivity() {
                 previewUseCase,
                 analysisUseCase
             )
-        } catch (_: Exception) {
-        }
+        } catch (_: Exception) { }
 
         runOnUiThread {
             setContent {
@@ -198,15 +247,20 @@ class QRScannerActivity : ComponentActivity() {
     }
 
     @OptIn(ExperimentalGetImage::class)
-    private fun processImageProxy(imageProxy: ImageProxy, onResult: (String?) -> Unit) {
+    private fun processImageProxy(
+        imageProxy: ImageProxy,
+        cropRect: Rect,
+        onResult: (ScannedBarcode?) -> Unit
+    ) {
         val mediaImage = imageProxy.image
         if (mediaImage != null) {
+            imageProxy.setCropRect(cropRect)
             val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
             barcodeScanner
                 ?.process(image)
                 ?.addOnSuccessListener { barcodes ->
-                    val rawValue = barcodes.firstOrNull()?.rawValue
-                    onResult(rawValue)
+                    val barcode = barcodes.firstOrNull()
+                    onResult(ScannedBarcode(barcode?.rawValue, barcode?.boundingBox))
                 }
                 ?.addOnFailureListener {
                     // Handle failure
@@ -216,6 +270,60 @@ class QRScannerActivity : ComponentActivity() {
             imageProxy.close()
         }
     }
+
+    private fun computeAnalysisCropRect(
+        imageProxy: ImageProxy,
+        previewView: PreviewView,
+        frameSizePx: Int
+    ): Rect {
+        val previewWidth = previewView.width.takeIf { it > 0 } ?: imageProxy.width
+        val previewHeight = previewView.height.takeIf { it > 0 } ?: imageProxy.height
+        val previewFrameWidthRatio = (frameSizePx.toFloat() / previewWidth).coerceIn(0.2f, 1f)
+        val previewFrameHeightRatio = (frameSizePx.toFloat() / previewHeight).coerceIn(0.2f, 1f)
+        val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+
+        val (frameWidthRatio, frameHeightRatio) =
+            if (rotationDegrees == 90 || rotationDegrees == 270) {
+                previewFrameHeightRatio to previewFrameWidthRatio
+            } else {
+                previewFrameWidthRatio to previewFrameHeightRatio
+            }
+
+        val cropRect =
+            QRScannerLogic.computeCenterCropRect(
+                imageWidth = imageProxy.width,
+                imageHeight = imageProxy.height,
+                frameWidthRatio = frameWidthRatio,
+                frameHeightRatio = frameHeightRatio
+            )
+        return Rect(cropRect.left, cropRect.top, cropRect.right, cropRect.bottom)
+    }
+
+    private fun maybeAutoZoom(
+        barcode: ScannedBarcode?,
+        analysisRect: Rect,
+        lastAutoZoomAtMillis: Long
+    ): Long? {
+        val bounds = barcode?.boundingBox ?: return null
+        val cameraInstance = camera ?: return null
+        val zoomState = cameraInstance.cameraInfo.zoomState.value ?: return null
+        val now = System.currentTimeMillis()
+        val nextZoomRatio =
+            QRScannerLogic.computeAutoZoomRatio(
+                currentZoomRatio = zoomState.zoomRatio,
+                maxZoomRatio = zoomState.maxZoomRatio,
+                barcodeBounds = bounds.toLogicRect(),
+                analysisRect = analysisRect.toLogicRect(),
+                lastAutoZoomAtMillis = lastAutoZoomAtMillis,
+                nowMillis = now
+            ) ?: return null
+
+        cameraInstance.cameraControl.setZoomRatio(nextZoomRatio)
+        return now
+    }
+
+    private fun Rect.toLogicRect(): QRScannerLogic.IntRect =
+        QRScannerLogic.IntRect(left = left, top = top, right = right, bottom = bottom)
 
     private fun isValidUrl(url: String?): Boolean {
         if (url.isNullOrEmpty()) return false
@@ -229,7 +337,7 @@ class QRScannerActivity : ComponentActivity() {
     private fun initializeScanSound() {
         toneGenerator = try {
             ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }
