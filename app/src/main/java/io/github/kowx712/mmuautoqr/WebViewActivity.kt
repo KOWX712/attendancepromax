@@ -52,6 +52,7 @@ import io.github.kowx712.mmuautoqr.utils.UserManager
 import io.github.kowx712.mmuautoqr.utils.WebViewHtmlSnapshotStore
 import io.github.kowx712.mmuautoqr.utils.decodeEvaluateJavascriptResult
 import java.io.File
+import kotlinx.coroutines.delay
 
 private const val AUTOMATION_ASSET_FILE_NAME = "automation.js"
 private const val AUTOMATION_USER_ID_PLACEHOLDER = "__USER_ID__"
@@ -130,6 +131,26 @@ internal fun shouldReopenQrScannerForAttendancePage(
     return isIntermediateAttendanceLoginUrl(requestedUrl, renderedUrl) && !hasAttendanceLoginForm(renderedHtml)
 }
 
+internal fun shouldInjectAutomationForUser(
+    currentUserIndex: Int,
+    lastInjectedUserIndex: Int,
+    activeUsersCount: Int,
+    hasWebView: Boolean,
+    attendanceUrl: String,
+    isLoadingPage: Boolean,
+    isError: Boolean
+): Boolean {
+    if (!hasWebView || attendanceUrl.isBlank() || isLoadingPage || isError) {
+        return false
+    }
+
+    if (currentUserIndex !in 0 until activeUsersCount) {
+        return false
+    }
+
+    return currentUserIndex != lastInjectedUserIndex
+}
+
 class WebViewActivity : ComponentActivity() {
     private lateinit var mainHandler: Handler
 
@@ -184,6 +205,7 @@ class WebViewActivity : ComponentActivity() {
         var automationRunId by remember { mutableIntStateOf(0) }
         var webViewRef by remember { mutableStateOf<WebView?>(null) }
         var hasStartedInitialLoad by remember { mutableStateOf(false) }
+        var lastInjectedUserIndex by remember { mutableIntStateOf(-1) }
         val attendanceUrl = remember {
             if (intent.action == Intent.ACTION_VIEW) {
                 intent.dataString ?: ""
@@ -191,11 +213,15 @@ class WebViewActivity : ComponentActivity() {
                 intent.getStringExtra("url") ?: ""
             }
         }
+        val automationScriptTemplate = remember {
+            assets.open(AUTOMATION_ASSET_FILE_NAME).bufferedReader().use { it.readText() }
+        }
 
         fun restartAutomation() {
             mainHandler.removeCallbacksAndMessages(null)
             automationRunId += 1
             currentUserIndex = 0
+            lastInjectedUserIndex = -1
             statusText = getString(R.string.loading_attendance_page)
             isError = false
             errorMessage = ""
@@ -240,6 +266,48 @@ class WebViewActivity : ComponentActivity() {
                 webView.post {
                     webView.loadUrl(attendanceUrl)
                 }
+            }
+        }
+
+        LaunchedEffect(
+            webViewRef,
+            attendanceUrl,
+            currentUserIndex,
+            activeUsers,
+            isLoadingPage,
+            isError,
+            automationRunId
+        ) {
+            val webView = webViewRef ?: return@LaunchedEffect
+            if (!shouldInjectAutomationForUser(
+                    currentUserIndex = currentUserIndex,
+                    lastInjectedUserIndex = lastInjectedUserIndex,
+                    activeUsersCount = activeUsers.size,
+                    hasWebView = true,
+                    attendanceUrl = attendanceUrl,
+                    isLoadingPage = isLoadingPage,
+                    isError = isError
+                )
+            ) {
+                return@LaunchedEffect
+            }
+
+            val user = activeUsers[currentUserIndex]
+            val runId = automationRunId
+            lastInjectedUserIndex = currentUserIndex
+            delay(1000)
+            if (runId != automationRunId) {
+                return@LaunchedEffect
+            }
+
+            val renderedScript = renderAutomationScriptTemplate(
+                template = automationScriptTemplate,
+                userId = user.userId,
+                password = user.password,
+                automationRunId = runId
+            )
+            webView.evaluateJavascript(renderedScript) {
+                webView.evaluateJavascript("automation.init();", null)
             }
         }
 
@@ -301,21 +369,6 @@ class WebViewActivity : ComponentActivity() {
                         }
                         isLoadingPage = false
                         isRefreshing = false
-                        mainHandler.postDelayed({
-                            if (currentUserIndex < activeUsers.size) {
-                                val user = activeUsers[currentUserIndex]
-                                val automationScript = assets.open(AUTOMATION_ASSET_FILE_NAME).bufferedReader().use { it.readText() }
-                                val renderedScript = renderAutomationScriptTemplate(
-                                    template = automationScript,
-                                    userId = user.userId,
-                                    password = user.password,
-                                    automationRunId = automationRunId
-                                )
-                                webView.evaluateJavascript(renderedScript) {
-                                    webView.evaluateJavascript("automation.init();", null)
-                                }
-                            }
-                        }, 2000)
                     },
                     onProvideWebView = { webView ->
                         webView.addJavascriptInterface(object : Any() {
