@@ -65,6 +65,7 @@ private const val INTERMEDIATE_LOGIN_ERROR_MARKER = "errorCode=105"
 private const val EXPIRED_QR_MESSAGE_MARKER = "Please signin from proper QR Code URL"
 private const val ATTENDANCE_LOGIN_USER_ID_FIELD = "N_QRCODE_DRV_USERID"
 private const val ATTENDANCE_LOGIN_PASSWORD_FIELD = "N_QRCODE_DRV_PASSWORD"
+private const val POST_SUBMIT_LOAD_TIMEOUT_MS = 3000L
 
 internal fun renderAutomationScriptTemplate(
     template: String,
@@ -206,6 +207,8 @@ class WebViewActivity : ComponentActivity() {
         var webViewRef by remember { mutableStateOf<WebView?>(null) }
         var hasStartedInitialLoad by remember { mutableStateOf(false) }
         var lastInjectedUserIndex by remember { mutableIntStateOf(-1) }
+        var waitingForPostSubmitLoad by remember { mutableStateOf(false) }
+        var postSubmitLoadTimeoutRunnable by remember { mutableStateOf<Runnable?>(null) }
         val attendanceUrl = remember {
             if (intent.action == Intent.ACTION_VIEW) {
                 intent.dataString ?: ""
@@ -381,11 +384,18 @@ class WebViewActivity : ComponentActivity() {
                                     val currentUser = activeUsers[submittedUserIndex]
                                     mainHandler.postDelayed({
                                         statusText = getString(R.string.login_submitted, currentUser.name)
-                                        mainHandler.postDelayed({
-                                            proceedToNextUser(activeUsers, submittedUserIndex) { nextIndex ->
-                                                currentUserIndex = nextIndex
+                                        waitingForPostSubmitLoad = true
+
+                                        val timeoutRunnable = Runnable {
+                                            if (waitingForPostSubmitLoad) {
+                                                waitingForPostSubmitLoad = false
+                                                proceedToNextUser(activeUsers, submittedUserIndex) { nextIndex ->
+                                                    currentUserIndex = nextIndex
+                                                }
                                             }
-                                        }, 3000)
+                                        }
+                                        postSubmitLoadTimeoutRunnable = timeoutRunnable
+                                        mainHandler.postDelayed(timeoutRunnable, POST_SUBMIT_LOAD_TIMEOUT_MS)
                                     }, 100)
                                 }
                             }
@@ -393,6 +403,9 @@ class WebViewActivity : ComponentActivity() {
                             @JavascriptInterface
                             fun onLoginFailed(runId: Int, reason: String) {
                                 if (runId != automationRunId) return
+
+                                waitingForPostSubmitLoad = false
+                                postSubmitLoadTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
 
                                 val failedUserIndex = currentUserIndex
                                 if (failedUserIndex < activeUsers.size) {
@@ -403,6 +416,22 @@ class WebViewActivity : ComponentActivity() {
                                                 currentUserIndex = nextIndex
                                             }
                                         }, 1000)
+                                    }
+                                }
+                            }
+
+                            @JavascriptInterface
+                            fun onLoadIndicatorHidden(runId: Int) {
+                                if (runId != automationRunId) return
+                                if (!waitingForPostSubmitLoad) return
+
+                                waitingForPostSubmitLoad = false
+                                postSubmitLoadTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+
+                                val submittedUserIndex = currentUserIndex
+                                if (submittedUserIndex < activeUsers.size) {
+                                    proceedToNextUser(activeUsers, submittedUserIndex) { nextIndex ->
+                                        currentUserIndex = nextIndex
                                     }
                                 }
                             }

@@ -2,6 +2,7 @@ window.automation = (function() {
   const startedAt = Date.now();
   const maxWaitMs = 5000;
   const pollIntervalMs = 250;
+  const submissionTimeoutMs = 3000;
   const userId = '__USER_ID__';
   const password = '__PASSWORD__';
   const automationRunId = __RUN_ID__;
@@ -23,6 +24,37 @@ window.automation = (function() {
     return document.readyState === 'interactive' || document.readyState === 'complete';
   }
 
+  function waitForSubmissionComplete() {
+    var indicator = document.getElementById('WAIT_win0');
+    var submitTime = Date.now();
+
+    function checkIndicator() {
+      var elapsed = Date.now() - submitTime;
+
+      if (!indicator) {
+        Android.onLoadIndicatorHidden(automationRunId);
+        return;
+      }
+
+      var style = window.getComputedStyle(indicator);
+      var isHidden = style.display === 'none' || style.visibility === 'hidden';
+
+      if (isHidden && elapsed > 100) {
+        Android.onLoadIndicatorHidden(automationRunId);
+        return;
+      }
+
+      if (elapsed >= submissionTimeoutMs) {
+        Android.onLoadIndicatorHidden(automationRunId);
+        return;
+      }
+
+      setTimeout(checkIndicator, pollIntervalMs);
+    }
+
+    setTimeout(checkIndicator, pollIntervalMs);
+  }
+
   function waitForForm() {
     const elapsedMs = Date.now() - startedAt;
     const fields = findFields();
@@ -34,8 +66,9 @@ window.automation = (function() {
         fields.user.value = userId;
         fields.pass.value = password;
         if (fields.submit) {
-          fields.submit.click();
           Android.onLoginSubmitted(automationRunId);
+          fields.submit.click();
+          waitForSubmissionComplete();
         } else {
           Android.onLoginFailed(automationRunId, 'Submit button not found');
         }
