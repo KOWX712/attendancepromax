@@ -17,7 +17,7 @@ jobs:
 
     steps:
     - name: Check out
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         fetch-depth: 1
 
@@ -44,4 +44,4 @@ jobs:
       with:
         name: ${{ matrix.build.name }}
         path: app/build/outputs/apk/${{ matrix.build.name }}/*.apk
-        compression-level: 9
+        archive: false
