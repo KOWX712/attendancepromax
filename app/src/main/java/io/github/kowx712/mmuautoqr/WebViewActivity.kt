@@ -63,8 +63,6 @@ private const val WEBVIEW_SNAPSHOT_LOG_TAG = "WebViewSnapshots"
 private const val INTERMEDIATE_LOGIN_QUERY_MARKER = "cmd=login"
 private const val INTERMEDIATE_LOGIN_ERROR_MARKER = "errorCode=105"
 private const val EXPIRED_QR_MESSAGE_MARKER = "Please signin from proper QR Code URL"
-private const val ATTENDANCE_LOGIN_USER_ID_FIELD = "N_QRCODE_DRV_USERID"
-private const val ATTENDANCE_LOGIN_PASSWORD_FIELD = "N_QRCODE_DRV_PASSWORD"
 private const val POST_SUBMIT_LOAD_TIMEOUT_MS = 3000L
 
 internal fun renderAutomationScriptTemplate(
@@ -107,29 +105,16 @@ internal fun isExpiredAttendancePage(renderedHtml: String): Boolean {
     return renderedHtml.contains(EXPIRED_QR_MESSAGE_MARKER, ignoreCase = true)
 }
 
-internal fun hasAttendanceLoginForm(renderedHtml: String): Boolean {
-    if (renderedHtml.isBlank()) {
-        return false
-    }
-
-    return renderedHtml.contains(ATTENDANCE_LOGIN_USER_ID_FIELD) &&
-        renderedHtml.contains(ATTENDANCE_LOGIN_PASSWORD_FIELD)
-}
-
-internal fun shouldReopenQrScannerForAttendancePage(
+internal fun shouldRetryAttendancePageLoad(
     requestedUrl: String,
     renderedUrl: String?,
-    renderedHtml: String
+    hasRetriedIntermediatePage: Boolean
 ): Boolean {
-    if (requestedUrl.isBlank() || renderedHtml.isBlank()) {
+    if (hasRetriedIntermediatePage) {
         return false
     }
 
-    if (isExpiredAttendancePage(renderedHtml)) {
-        return true
-    }
-
-    return isIntermediateAttendanceLoginUrl(requestedUrl, renderedUrl) && !hasAttendanceLoginForm(renderedHtml)
+    return isIntermediateAttendanceLoginUrl(requestedUrl, renderedUrl)
 }
 
 internal fun shouldInjectAutomationForUser(
@@ -206,6 +191,7 @@ class WebViewActivity : ComponentActivity() {
         var automationRunId by remember { mutableIntStateOf(0) }
         var webViewRef by remember { mutableStateOf<WebView?>(null) }
         var hasStartedInitialLoad by remember { mutableStateOf(false) }
+        var hasRetriedIntermediatePage by remember { mutableStateOf(false) }
         var lastInjectedUserIndex by remember { mutableIntStateOf(-1) }
         var waitingForPostSubmitLoad by remember { mutableStateOf(false) }
         var postSubmitLoadTimeoutRunnable by remember { mutableStateOf<Runnable?>(null) }
@@ -231,6 +217,7 @@ class WebViewActivity : ComponentActivity() {
             isLoadingPage = true
             isRefreshing = true
             hasStartedInitialLoad = true
+            hasRetriedIntermediatePage = false
             webViewRef?.stopLoading()
             webViewRef?.post {
                 if (attendanceUrl.isNotEmpty()) {
@@ -342,16 +329,28 @@ class WebViewActivity : ComponentActivity() {
                                 return@evaluateJavascript
                             }
 
-                            if (shouldReopenQrScannerForAttendancePage(
-                                    requestedUrl = attendanceUrl,
-                                    renderedUrl = renderedUrl ?: webView.url,
-                                    renderedHtml = renderedHtml
-                                )
-                            ) {
+                            if (isExpiredAttendancePage(renderedHtml)) {
                                 statusText = getString(R.string.loading_attendance_page)
                                 isLoadingPage = false
                                 isRefreshing = false
                                 reopenQrScanner()
+                                return@evaluateJavascript
+                            }
+
+                            if (shouldRetryAttendancePageLoad(
+                                    requestedUrl = attendanceUrl,
+                                    renderedUrl = renderedUrl ?: webView.url,
+                                    hasRetriedIntermediatePage = hasRetriedIntermediatePage
+                                )
+                            ) {
+                                hasRetriedIntermediatePage = true
+                                statusText = getString(R.string.retrying_attendance_page)
+                                isLoadingPage = true
+                                isRefreshing = true
+                                webView.stopLoading()
+                                webView.post {
+                                    webView.loadUrl(attendanceUrl)
+                                }
                                 return@evaluateJavascript
                             }
 
