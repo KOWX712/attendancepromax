@@ -1,0 +1,84 @@
+{
+  "@@locale": "en",
+  "appTitle": "AttendanceProMax",
+  "tabHome": "Home",
+  "tabUsers": "Users",
+  "tabSettings": "Settings",
+  "homeUserStatistics": "User statistics",
+  "homeTotalUsers": "Total users: {count}",
+  "@homeTotalUsers": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "homeActiveUsers": "Active users: {count}",
+  "@homeActiveUsers": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "homeAddActiveUserBeforeScanner": "Add an active user before opening the scanner.",
+  "settingsTitle": "Settings",
+  "settingsUiMode": "UI mode",
+  "settingsUiModeApple": "Apple",
+  "settingsUiModeAndroid": "Android",
+  "settingsAutoOpenQrScannerTitle": "Open QR scanner on app launch",
+  "settingsAutoOpenQrScannerSubtitle": "Only if any active user exist.",
+  "usersTitle": "Users",
+  "usersDuplicateIdError": "User ID already exists.",
+  "usersNameLabel": "Name",
+  "usersIdLabel": "User ID",
+  "usersPasswordLabel": "Password",
+  "usersAddTitle": "Add user",
+  "usersEditTitle": "Edit user",
+  "commonCancel": "Cancel",
+  "commonDelete": "Delete",
+  "commonAdd": "Add",
+  "commonSave": "Save",
+  "usersValidationNameRequired": "Name is required.",
+  "usersValidationIdTooShort": "User ID must be at least 3 characters.",
+  "usersValidationPasswordTooShort": "Password must be at least 4 characters.",
+  "usersShowPassword": "Show password",
+  "usersHidePassword": "Hide password",
+  "scannerTitle": "Scan QR code",
+  "scannerNoActiveUsers": "Add at least one active user before starting the attendance scanner.",
+  "scannerCameraStartError": "Unable to start camera scanner.",
+  "scannerHint": "Point the camera at the attendance QR code.",
+  "scannerInvalidAttendanceUrl": "Scanned QR code is not a valid attendance URL.",
+  "attendanceTitle": "Attendance",
+  "attendanceLoadingStatus": "Loading attendance page...",
+  "attendanceSubmittingStatus": "Submitting attendance for {name}...",
+  "@attendanceSubmittingStatus": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "attendanceNoActiveUsers": "No active users found. Activate at least one user and scan again.",
+  "attendanceRetry": "Retry",
+  "attendanceLoginSubmittedStatus": "Login submitted for {name}",
+  "@attendanceLoginSubmittedStatus": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "attendanceUnknownLoginError": "Unknown login error",
+  "attendanceLoginFailed": "Login failed: {reason}",
+  "@attendanceLoginFailed": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "attendanceCompleted": "Attendance automation completed.",
+  "attendancePreviewHost": "attendance.example.com",
+  "attendancePreviewDescription": "Attendance page preview\n\nWebView content is replaced with a static mock in the widget previewer."
+}
