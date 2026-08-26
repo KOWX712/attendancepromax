@@ -1,0 +1,49 @@
+name: build
+
+on:
+  push:
+    branches: flutter
+    paths-ignore: '**.md'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out
+      uses: actions/checkout@v7
+      with:
+        fetch-depth: 1
+
+    - name: Set up JDK
+      uses: actions/setup-java@v5
+      with:
+        distribution: 'temurin'
+        java-version: 17
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.47.1'
+        channel: 'stable'
+        cache: true
+
+    - name: Setup keystore
+      run: |
+        cd android
+        echo "KEY_STORE_FILE=$(pwd)/key.jks" > keystore.properties
+        echo "${{ secrets.KEYSTOREPROP }}" | base64 -d >> keystore.properties
+        echo "${{ secrets.KEYSTORE }}" | base64 -d > key.jks
+
+    - name: Get dependencies
+      run: flutter pub get
+
+    - name: Build Android ARM64 Release APK
+      run: flutter build apk --release --split-per-abi --target-platform android-arm64
+
+    - name: Upload release APK
+      uses: actions/upload-artifact@v7
+      with:
+        path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+        archive: false
